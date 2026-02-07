@@ -1,0 +1,130 @@
+.blende {
+    filter: opacity(0.8);
+}
+.popup-position {
+    left: 50%;
+    transform: translateX(-100%) translateX(-0px);
+    bottom: -40px;
+}
+
+.boop > img {
+    transition: all 0.3s ease;
+}
+
+.boop:hover > img {
+    filter: opacity(0.93);
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+}
+
+.fade-in-image {
+    opacity: 0;
+    transition: opacity 200ms ease-in-out;
+}
+
+.fade-in-image.loaded {
+    opacity: 1;
+}
+
+.no-fade {
+    opacity: 1;
+    transition: none;
+}
+
+// Add disc to ul
+.uldisc ul {
+    list-style-type: disc !important;
+    list-style-position: inside !important;
+}
+
+.mol svg {
+    width: 475px;
+    height: 475px;
+}
+
+// Collection Image styles
+
+.cimg {
+    filter: opacity(1);
+    transition: filter 0.3s ease;
+    cursor: pointer;
+}
+
+.cimg:hover {
+    filter: opacity(0.85);
+    transition: filter 0.3s ease;
+}
+
+.cimgg:hover {
+    transform: scale(1.08);
+    transition: transform 0.5s ease;
+}
+
+.vignette-blur {
+    position: relative;
+    display: inline-block;
+    overflow: hidden; /* Contains the blur effect */
+}
+
+.vignette-blur img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.vignette-blur::after {
+    content: "";
+    position: absolute;
+    inset: 0; /* Covers entire container */
+
+    /* Gradient mask (transparent center → partially opaque edges) */
+    background: radial-gradient(
+        circle,
+        transparent 40%,
+        rgba(0, 0, 0, 0.3) 100%
+    );
+
+    /* This is where the magic happens */
+    -webkit-backdrop-filter: blur(8px); /* Safari support */
+    backdrop-filter: blur(8px); /* Standard */
+
+    pointer-events: none; /* Allows interaction with image beneath */
+}
+
+// End of collection image styles
+
+
+.range-slider-min::-webkit-slider-track,
+.range-slider-max::-webkit-slider-track {
+    background: transparent;
+    border: none;
+}
+
+.range-slider-min::-moz-range-track,
+.range-slider-max::-moz-range-track {
+    background: transparent;
+    border: none;
+}
+
+.range-slider-min::-webkit-slider-thumb,
+.range-slider-max::-webkit-slider-thumb {
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.range-slider-min::-moz-range-thumb,
+.range-slider-max::-moz-range-thumb {
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}

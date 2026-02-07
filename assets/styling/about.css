@@ -1,0 +1,81 @@
+.effect-shine {
+    -webkit-mask-image: linear-gradient(
+        -75deg,
+        rgba(0, 0, 0, 0.6) 30%,
+        rgba(0, 0, 0, 0) 50%,
+        rgba(0, 0, 0, 0.6) 70%
+    );
+    -webkit-mask-size: 200%;
+    animation: shine 5s infinite;
+}
+
+@keyframes shine {
+    from {
+        -webkit-mask-position: 150%;
+    }
+
+    to {
+        -webkit-mask-position: -50%;
+    }
+}
+
+@webkit-keyframes shine {
+    from {
+        -webkit-mask-position: 150%;
+    }
+
+    to {
+        -webkit-mask-position: -50%;
+    }
+}
+
+.water-background {
+    margin-top: -10px;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: #08080a;
+    background-size: cover;
+    overflow: hidden;
+}
+
+.water-background .water {
+    top: 0px;
+    margin-top: -150px;
+    margin-bottom: -20px;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background-size: cover;
+    -webkit-animation: myfirst 6s; /* Chrome, Safari, Opera */
+    animation: myfirst 6s;
+    filter: url("#turbulence");
+}
+
+@-webkit-keyframes myfirst {
+    from,
+    to {
+        opacity: 0;
+    }
+    10% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Standard syntax */
+@keyframes myfirst {
+    from,
+    to {
+        opacity: 0;
+    }
+    10% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
+}

@@ -1,0 +1,133 @@
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    
+    #[test]
+    fn test_calculate_available_units_from_stock() {
+        // Test with Multiples
+        let stock = StockUnitQuantity::Multiples(10);
+        let required = 2.0;
+        let unit = StockUnit::Multiples;
+        assert_eq!(calculate_available_units_from_stock(&stock, required, &unit), 5);
+        
+        // Test with insufficient stock
+        let stock = StockUnitQuantity::Multiples(3);
+        let required = 2.0;
+        assert_eq!(calculate_available_units_from_stock(&stock, required, &unit), 1);
+        
+        // Test with zero stock
+        let stock = StockUnitQuantity::Multiples(0);
+        assert_eq!(calculate_available_units_from_stock(&stock, required, &unit), 0);
+        
+        // Test with Grams
+        let stock = StockUnitQuantity::Grams(100.0);
+        let required = 15.0;
+        let unit = StockUnit::Grams;
+        assert_eq!(calculate_available_units_from_stock(&stock, required, &unit), 6);
+    }
+    
+    #[test]
+    fn test_variant_stock_calculation_bottleneck() {
+        // This test demonstrates the bottleneck scenario where the variant
+        // can only be produced as much as the most limiting stock item allows
+        
+        let stock_results = vec![
+            StockQuantityResult {
+                stock_item_id: "stock_a".to_string(),
+                ready_stock_quantity: StockUnitQuantity::Multiples(10),
+                unready_stock_quantity: StockUnitQuantity::Multiples(0),
+                total_stock_quantity: StockUnitQuantity::Multiples(10), // 10 available
+                total_child_stock_items: 0,
+                stock_too_low: false,
+                required_father_replacement_level: None,
+            },
+            StockQuantityResult {
+                stock_item_id: "stock_b".to_string(),
+                ready_stock_quantity: StockUnitQuantity::Multiples(4),
+                unready_stock_quantity: StockUnitQuantity::Multiples(0),
+                total_stock_quantity: StockUnitQuantity::Multiples(4), // 4 available
+                total_child_stock_items: 0,
+                stock_too_low: false,
+                required_father_replacement_level: None,
+            },
+        ];
+        
+        let relations = vec![
+            product_variant_stock_item_relations::Model {
+                product_variant_id: "variant_1".to_string(),
+                stock_item_id: "stock_a".to_string(),
+                quantity: 2.0, // Need 2 of stock_a per variant -> 10/2 = 5 possible
+                stock_unit_on_creation: entity::sea_orm_active_enums::StockUnit::Multiples,
+            },
+            product_variant_stock_item_relations::Model {
+                product_variant_id: "variant_1".to_string(),
+                stock_item_id: "stock_b".to_string(),
+                quantity: 1.0, // Need 1 of stock_b per variant -> 4/1 = 4 possible
+                stock_unit_on_creation: entity::sea_orm_active_enums::StockUnit::Multiples,
+            },
+        ];
+        
+        let mut products = vec![
+            Product {
+                id: "product_1".to_string(),
+                title: "Test Product".to_string(),
+                variants: Some(vec![
+                    ProductVariants {
+                        id: "variant_1".to_string(),
+                        variant_name: "Test Variant".to_string(),
+                        product_id: "product_1".to_string(),
+                        calculated_stock_quantity: None,
+                        // ... other required fields with default values
+                        pbx_sku: None,
+                        thumbnail_url: None,
+                        price_standard_usd: 0.0,
+                        price_standard_without_sale: None,
+                        additional_thumbnail_urls: None,
+                        created_at: Utc::now().naive_utc(),
+                        updated_at: Utc::now().naive_utc(),
+                    }
+                ]),
+                // ... other required fields with default values
+                subtitle: None,
+                alternate_names: None,
+                handle: "test-product".to_string(),
+                collections: None,
+                product_form: ProductForm::Other, // Assuming Other exists
+                physical_description: None,
+                default_variant_id: None,
+                force_no_stock: false,
+                plabs_node_id: None,
+                purity: None,
+                visibility: ProductVisibility::Public, // Assuming Public exists
+                small_description_md: None,
+                main_description_md: None,
+                cas: None,
+                iupac: None,
+                mol_form: None,
+                smiles: None,
+                enable_render_if_smiles: false,
+                pubchem_cid: None,
+                calculated_admet: None,
+                analysis_url_qnmr: None,
+                analysis_url_hplc: None,
+                analysis_url_qh1: None,
+                weight: None,
+                dimensions_height: None,
+                dimensions_length: None,
+                dimensions_width: None,
+                created_at: Utc::now().naive_utc(),
+                updated_at: Utc::now().naive_utc(),
+                product_phase: ProductPhase::Blue, // Assuming Blue exists
+                pre_order: false,
+                pre_order_goal: None,
+            }
+        ];
+        
+        let result = calculate_variant_stock_quantities(products, relations, stock_results);
+        
+        // Should be limited by stock_b (4 available, 1 needed per variant = 4 possible)
+        // Even though stock_a could make 5 variants (10 available, 2 needed per variant = 5 possible)
+        assert_eq!(result[0].variants.as_ref().unwrap()[0].calculated_stock_quantity, Some(4));
+    }
+}

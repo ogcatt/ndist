@@ -1,0 +1,17 @@
+[package]
+name = "entity"
+version = "0.1.0"
+edition = "2021"  # Fix: was "2024", should be "2021"
+
+[dependencies]
+# Make all database-related dependencies optional
+sea-orm = { version = "1.1.0", features = [
+    "sqlx-sqlite",
+    "runtime-tokio-native-tls",
+    "macros",
+    "with-json",
+    "with-chrono",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4.41"

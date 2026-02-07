@@ -1,0 +1,388 @@
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "server")]
+use {
+    chrono::{Duration, Utc},
+    entity::{manager_sessions, managers},
+    sea_orm::{ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter},
+    supabase_auth::models::AuthClient,
+    uuid::Uuid,
+    axum::{
+        extract::{Request, State},
+        http::{header::COOKIE, HeaderMap, StatusCode},
+        middleware::Next,
+        response::{IntoResponse, Redirect, Response},
+    },
+    std::collections::HashMap,
+    jsonwebtoken::{decode, DecodingKey, Validation, Algorithm},
+    base64::{Engine as _, engine::general_purpose},
+    moka::future::Cache,
+    std::time::Duration as StdDuration,
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Manager {
+    pub id: String,
+    pub email: String,
+    pub name: String,
+    pub permissions: String,
+    pub authenticated: bool,
+}
+
+impl Default for Manager {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            email: String::new(),
+            name: String::new(),
+            permissions: String::new(),
+            authenticated: false,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SupabaseTokenClaims {
+    pub sub: String,
+    pub email: Option<String>,
+    pub exp: usize,
+    pub iat: usize,
+    pub iss: String,
+    pub aud: String,
+}
+
+#[cfg(feature = "server")]
+#[derive(Clone)]
+pub struct AppState {
+    pub auth_service: std::sync::Arc<AuthService>,
+    pub session_cache: Cache<String, Manager>,
+    pub negative_cache: Cache<String, ()>, // Cache for invalid tokens
+}
+
+#[cfg(feature = "server")]
+pub struct AuthService {
+    pub supabase_client: AuthClient,
+    pub db: DatabaseConnection,
+    pub jwt_secret: String,
+}
+
+#[cfg(feature = "server")]
+impl AuthService {
+    pub fn new(db: DatabaseConnection) -> Result<Self, anyhow::Error> {
+        // Read environment variables manually
+        let project_url = std::env::var("SUPABASE_URL")
+            .map_err(|_| anyhow::anyhow!("SUPABASE_URL not found"))?;
+        let api_key = std::env::var("SUPABASE_ANON_KEY")
+            .map_err(|_| anyhow::anyhow!("SUPABASE_ANON_KEY not found"))?;
+        let jwt_secret = std::env::var("SUPABASE_JWT_SECRET")
+            .map_err(|_| anyhow::anyhow!("SUPABASE_JWT_SECRET not found"))?;
+
+        let supabase_client = AuthClient::new(&project_url, &api_key, &jwt_secret);
+
+        Ok(Self {
+            supabase_client,
+            db,
+            jwt_secret,
+        })
+    }
+
+    pub async fn send_magic_link(&self, email: &str) -> Result<(), anyhow::Error> {
+        // Check if manager exists
+        let manager = managers::Entity::find()
+            .filter(managers::Column::Email.eq(email))
+            .one(&self.db)
+            .await?;
+
+        if manager.is_none() {
+            return Err(anyhow::anyhow!("Manager not found"));
+        }
+
+        self.supabase_client.send_login_email_with_magic_link(email).await?;
+        Ok(())
+    }
+
+    pub async fn verify_and_create_session(&self, access_token: &str) -> Result<String, anyhow::Error> {
+        // Verify the JWT token from Supabase
+        let email = self.verify_supabase_token(access_token)?;
+
+        // Find the manager by email
+        let manager = managers::Entity::find()
+            .filter(managers::Column::Email.eq(&email))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Manager not found"))?;
+
+        // Create a new session
+        let session_token = Uuid::new_v4().to_string();
+        let now = Utc::now().naive_utc();
+        let expires_at = now + Duration::days(120);
+
+        let session = manager_sessions::ActiveModel {
+            id: ActiveValue::Set(Uuid::new_v4().to_string()),
+            manager_id: ActiveValue::Set(manager.id.clone()),
+            token: ActiveValue::Set(session_token.clone()),
+            expires_at: ActiveValue::Set(expires_at),
+            created_at: ActiveValue::Set(now),
+            updated_at: ActiveValue::Set(now),
+        };
+
+        manager_sessions::Entity::insert(session)
+            .exec(&self.db)
+            .await?;
+
+        Ok(session_token)
+    }
+
+    pub async fn validate_session(&self, token: &str) -> Result<Manager, anyhow::Error> {
+        let now = Utc::now().naive_utc();
+
+        // Find valid session
+        let session = manager_sessions::Entity::find()
+            .filter(manager_sessions::Column::Token.eq(token))
+            .filter(manager_sessions::Column::ExpiresAt.gt(now))
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Invalid or expired session"))?;
+
+        // Get the manager
+        let manager = managers::Entity::find_by_id(&session.manager_id)
+            .one(&self.db)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Manager not found"))?;
+
+        Ok(Manager {
+            id: manager.id,
+            email: manager.email,
+            name: manager.name,
+            permissions: manager.permissions.to_string(),
+            authenticated: true,
+        })
+    }
+
+    pub async fn validate_session_with_negative_cache(
+        &self,
+        token: &str,
+        session_cache: &Cache<String, Manager>,
+        negative_cache: &Cache<String, ()>
+    ) -> Result<Manager, anyhow::Error> {
+        // Check if token is in negative cache (known to be invalid)
+        if negative_cache.get(token).await.is_some() {
+            tracing::info!("Token found in negative cache: {}", &token[..8]);
+            return Err(anyhow::anyhow!("Token is cached as invalid"));
+        }
+
+        // Check positive cache
+        if let Some(cached_manager) = session_cache.get(token).await {
+            tracing::info!("Session found in positive cache for token: {}", &token[..8]);
+            return Ok(cached_manager);
+        }
+
+        tracing::info!("Session not in cache, validating from database for token: {}", &token[..8]);
+
+        // Validate from database
+        match self.validate_session(token).await {
+            Ok(manager) => {
+                // Cache successful validation
+                session_cache.insert(token.to_string(), manager.clone()).await;
+                tracing::info!("Session cached successfully for token: {}", &token[..8]);
+                Ok(manager)
+            }
+            Err(e) => {
+                // Cache failed validation for a short time to avoid repeated DB hits
+                negative_cache.insert(token.to_string(), ()).await;
+                tracing::info!("Session validation failed, added to negative cache: {}", &token[..8]);
+                Err(e)
+            }
+        }
+    }
+
+    pub async fn logout_and_invalidate_cache(
+        &self,
+        token: &str,
+        session_cache: &Cache<String, Manager>,
+        negative_cache: &Cache<String, ()>
+    ) -> Result<(), anyhow::Error> {
+        // Remove from database
+        manager_sessions::Entity::delete_many()
+            .filter(manager_sessions::Column::Token.eq(token))
+            .exec(&self.db)
+            .await?;
+
+        // Remove from both caches - use the token string directly
+        session_cache.invalidate(token).await;
+        negative_cache.invalidate(token).await;
+
+        tracing::info!("Session invalidated for token: {}", &token[..8]);
+        Ok(())
+    }
+
+    pub async fn logout(&self, token: &str) -> Result<(), anyhow::Error> {
+        manager_sessions::Entity::delete_many()
+            .filter(manager_sessions::Column::Token.eq(token))
+            .exec(&self.db)
+            .await?;
+        Ok(())
+    }
+
+    // Method to invalidate all sessions for a user
+    pub async fn invalidate_user_sessions(
+        &self,
+        user_id: &str,
+        session_cache: &Cache<String, Manager>,
+        negative_cache: &Cache<String, ()>
+    ) -> Result<(), anyhow::Error> {
+        // Remove all sessions for this user from database
+        manager_sessions::Entity::delete_many()
+            .filter(manager_sessions::Column::ManagerId.eq(user_id))
+            .exec(&self.db)
+            .await?;
+
+        // Remove from cache (we need to iterate through cache entries)
+        // This is less efficient but necessary for user-based invalidation
+        session_cache.run_pending_tasks().await;
+        let snapshot: Vec<_> = session_cache.iter().collect();
+        for (token, manager) in snapshot {
+            if manager.id == user_id {
+                // Use as_ref() to get &str from Arc<String>
+                session_cache.invalidate(token.as_ref()).await;
+                negative_cache.invalidate(token.as_ref()).await;
+            }
+        }
+
+        tracing::info!("All sessions invalidated for user: {}", user_id);
+        Ok(())
+    }
+
+    fn verify_supabase_token(&self, token: &str) -> Result<String, anyhow::Error> {
+        let key = DecodingKey::from_secret(self.jwt_secret.as_ref());
+        let validation = Validation::new(Algorithm::HS256);
+
+        let token_data = decode::<SupabaseTokenClaims>(token, &key, &validation)?;
+
+        token_data.claims.email
+            .ok_or_else(|| anyhow::anyhow!("Email not found in token"))
+    }
+}
+
+#[cfg(feature = "server")]
+pub async fn auth_middleware(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let uri = request.uri();
+    let path = uri.path();
+
+    // Skip auth for signin and verify routes, and for non-admin routes
+    if path == "/admin/signin"
+        || path.starts_with("/admin/verify")
+        || (!path.starts_with("/admin") && !path.starts_with("/api/admin")) {
+        return Ok(next.run(request).await);
+    }
+
+    // Check for session cookie
+    let headers = request.headers();
+    let cookies = parse_cookies(headers);
+
+    if let Some(session_token) = cookies.get("session_token") {
+        // Validate the session token using cached validation
+        match state.auth_service.validate_session_with_negative_cache(
+            session_token,
+            &state.session_cache,
+            &state.negative_cache
+        ).await {
+            Ok(manager) => {
+                // Session is valid, add manager to request extensions
+                request.extensions_mut().insert(manager);
+                return Ok(next.run(request).await);
+            }
+            Err(e) => {
+                tracing::info!("Session validation failed: {}", e);
+                // Invalid session, ensure it's in negative cache
+                state.negative_cache.insert(session_token.to_string(), ()).await;
+            }
+        }
+    }
+
+    // Redirect to signin if no valid session
+    Ok(Redirect::to("/admin/signin").into_response())
+}
+
+#[cfg(feature = "server")]
+fn parse_cookies(headers: &HeaderMap) -> HashMap<String, String> {
+    let mut cookies = HashMap::new();
+
+    if let Some(cookie_header) = headers.get(COOKIE) {
+        if let Ok(cookie_str) = cookie_header.to_str() {
+            for cookie in cookie_str.split(';') {
+                let mut parts = cookie.trim().splitn(2, '=');
+                if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
+                    cookies.insert(key.to_string(), value.to_string());
+                }
+            }
+        }
+    }
+
+    cookies
+}
+
+// Helper function to extract authenticated manager from request extensions
+#[cfg(feature = "server")]
+pub fn get_authenticated_manager(request: &Request) -> Option<&Manager> {
+    request.extensions().get::<Manager>()
+}
+
+#[cfg(feature = "server")]
+pub async fn setup_app_state() -> Result<AppState, anyhow::Error> {
+    use sea_orm::Database;
+
+    let database_url = std::env::var("DATABASE_URL")?;
+    let db = Database::connect(&database_url).await?;
+    let auth_service = AuthService::new(db)?;
+
+    // Positive cache for valid sessions
+    let session_cache = Cache::builder()
+        .max_capacity(10_000) // Maximum number of sessions to cache
+        .time_to_live(StdDuration::from_secs(15 * 60)) // 15 minutes TTL
+        .time_to_idle(StdDuration::from_secs(5 * 60))  // 5 minutes idle time
+        .build();
+
+    // Negative cache for invalid tokens (shorter TTL to prevent abuse)
+    let negative_cache = Cache::builder()
+        .max_capacity(5_000) // Smaller capacity for invalid tokens
+        .time_to_live(StdDuration::from_secs(2 * 60)) // 2 minutes only
+        .build();
+
+    tracing::info!("Auth caches initialized - Session cache: 15min TTL, Negative cache: 2min TTL");
+
+    Ok(AppState {
+        auth_service: std::sync::Arc::new(auth_service),
+        session_cache,
+        negative_cache,
+    })
+}
+
+// Additional utility functions for cache management
+#[cfg(feature = "server")]
+impl AppState {
+    pub async fn get_cache_stats(&self) -> (u64, u64) {
+        (
+            self.session_cache.entry_count(),
+            self.negative_cache.entry_count()
+        )
+    }
+
+    pub async fn clear_all_caches(&self) {
+        self.session_cache.invalidate_all();
+        self.negative_cache.invalidate_all();
+        tracing::info!("All caches cleared");
+    }
+
+    pub async fn logout_user(&self, token: &str) -> Result<(), anyhow::Error> {
+        self.auth_service.logout_and_invalidate_cache(
+            token,
+            &self.session_cache,
+            &self.negative_cache
+        ).await
+    }
+}
