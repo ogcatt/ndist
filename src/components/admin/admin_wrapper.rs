@@ -11,13 +11,13 @@ pub fn AdminWrapper() -> Element {
     let mut is_dark_mode = use_signal(|| false);
     let mut is_user_menu_open = use_signal(|| false);
 
-    let current_manager = use_resource(|| get_current_manager());
+    let current_user = use_resource(|| get_current_user());
 
     let navigator = use_navigator();
 
     let handle_logout = move |_| {
         spawn(async move {
-            match logout_manager().await {
+            match logout_user().await {
                 Ok(_) => {
                     navigator.push("/admin/signin");
                 }
@@ -174,7 +174,7 @@ pub fn AdminWrapper() -> Element {
                                 }
                             }
 
-                            match current_manager.read().as_ref() {
+                            match current_user.read().as_ref() {
                                 Some(Ok(Some(user))) => rsx! {
                                 div {
                                     class: "relative",
@@ -224,7 +224,7 @@ pub fn AdminWrapper() -> Element {
                                 },
                                 None | Some(&Ok(None)) => rsx! {},
                                 Some(Err(_)) => rsx! {
-                                    div { "Loading manager info failed" }
+                                    div { "Loading user info failed" }
                                 },
                             }
                         }

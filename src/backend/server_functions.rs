@@ -6,6 +6,8 @@ use dioxus::prelude::*;
 
 // Allow payments access with server_functions::payments
 pub use super::payments;
+use super::auth::User as AuthUser;
+type User = AuthUser;
 
 #[cfg(feature = "server")]
 use super::db::get_db;
@@ -19,16 +21,14 @@ use super::shipping_calculations::{
 #[cfg(feature = "server")]
 use super::email::{EmailService, EmailType};
 
-use super::auth::Manager;
-
 #[cfg(feature = "server")]
 use entity::{
-    self, address, basket_items, blog_posts, customer_baskets, discounts, manager_sessions,
-    managers, order, order_item, payment, pre_order, product_variant_stock_item_relations,
+    self, address, basket_items, blog_posts, customer_baskets, discounts, user_sessions,
+    users as entity_users, order, order_item, payment, pre_order, product_variant_stock_item_relations,
     product_variants, products, sea_orm_active_enums, stock_active_reduce,
     stock_backorder_active_reduce, stock_batches, stock_item_relations, stock_items,
     stock_preorder_active_reduce,
-}; // Import the products and auth modules from your entity crate
+};
 #[cfg(feature = "server")]
 use sea_orm::{
     self, ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, QuerySelect,
@@ -1137,7 +1137,7 @@ fn parse_cookies_from_string(cookie_str: &str) -> HashMap<String, String> {
 #[cfg(feature = "server")]
 async fn get_basket_id_from_cookie() -> Result<Option<String>, CookieError> {
     use dioxus::fullstack::FullstackContext;
-    
+
     // Access request headers via Dioxus server context
     let server_ctx = FullstackContext::current()
         .expect("Server context should be available");
@@ -1310,9 +1310,9 @@ pub async fn get_short_order(order_id: String) -> Result<OrderShortInfo, ServerF
 
 #[server]
 pub async fn admin_get_orders(get_expired: bool) -> Result<Vec<OrderInfo>, ServerFnError> {
-    // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    // Check authentication - user must be admin
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         panic!("Unauthorized");
     }
 
@@ -2927,8 +2927,8 @@ pub async fn admin_upload_thumbnails(
     content_type: String,
 ) -> Result<UploadResponse, ServerFnError> {
     // Check if user is authenticated and has admin permissions
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(UploadResponse {
             success: false,
             url: None,
@@ -2947,8 +2947,8 @@ pub async fn admin_upload_private_thumbnails(
     content_type: String,
 ) -> Result<UploadResponse, ServerFnError> {
     // Check if user is authenticated and has admin permissions
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(UploadResponse {
             success: false,
             url: None,
@@ -3404,8 +3404,8 @@ pub async fn admin_edit_product(
     request: CreateEditProductRequest,
 ) -> Result<CreateProductResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(CreateProductResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -3827,8 +3827,8 @@ pub async fn admin_create_stock_item(
     request: CreateStockItemRequest,
 ) -> Result<CreateStockItemResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(CreateStockItemResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -3974,8 +3974,8 @@ pub async fn admin_edit_stock_item(
     use sea_orm::sea_query::OnConflict;
 
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(EditStockItemResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -4390,8 +4390,8 @@ pub async fn admin_create_discount(
     request: CreateDiscountRequest,
 ) -> Result<CreateDiscountResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(CreateDiscountResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -4634,8 +4634,8 @@ pub async fn admin_get_discount(
     request: GetDiscountRequest,
 ) -> Result<GetDiscountResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(GetDiscountResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -4706,8 +4706,8 @@ pub async fn admin_update_discount(
     request: UpdateDiscountRequest,
 ) -> Result<UpdateDiscountResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(UpdateDiscountResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -4918,8 +4918,8 @@ pub async fn admin_delete_discount(
     request: DeleteDiscountRequest,
 ) -> Result<DeleteDiscountResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(DeleteDiscountResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -4976,8 +4976,8 @@ pub async fn admin_create_blog_post(
     request: CreateBlogPostRequest,
 ) -> Result<CreateBlogPostResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(CreateBlogPostResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -5103,8 +5103,8 @@ pub async fn admin_edit_blog_post(
     request: EditBlogPostRequest,
 ) -> Result<EditBlogPostResponse, ServerFnError> {
     // Check authentication
-    let manager = get_current_manager().await?;
-    if manager.is_none() || !check_admin_permission().await? {
+    let user = get_current_user().await?;
+    if user.is_none() || !check_admin_permission().await? {
         return Ok(EditBlogPostResponse {
             success: false,
             message: "Unauthorized".to_string(),
@@ -6283,17 +6283,17 @@ fn calculate_unready_stock_with_allocations(
 pub async fn send_magic_link(email: String) -> Result<AuthResponse, ServerFnError> {
     let db = get_db().await;
 
-    // Check if manager exists
-    let manager = managers::Entity::find()
-        .filter(managers::Column::Email.eq(&email))
+    // Check if user exists
+    let user = entity_users::Entity::find()
+        .filter(entity_users::Column::Email.eq(&email))
         .one(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
 
-    if manager.is_none() {
+    if user.is_none() {
         return Ok(AuthResponse {
             success: false,
-            message: "Manager not found. Please contact an administrator.".to_string(),
+            message: "User not found. Please contact an administrator.".to_string(),
         });
     }
 
@@ -6354,29 +6354,29 @@ pub async fn verify_magic_link(access_token: String) -> Result<AuthResponse, Ser
         .email
         .ok_or_else(|| ServerFnError::new("Email not found in token".to_string()))?;
 
-    // Find the manager by email
-    let manager = managers::Entity::find()
-        .filter(managers::Column::Email.eq(&email))
+    // Find the user by email
+    let user = entity_users::Entity::find()
+        .filter(entity_users::Column::Email.eq(&email))
         .one(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
-        .ok_or_else(|| ServerFnError::new("Manager not found".to_string()))?;
+        .ok_or_else(|| ServerFnError::new("User not found".to_string()))?;
 
     // Create a new session
     let session_token = Uuid::new_v4().to_string();
     let now = Utc::now().naive_utc();
     let expires_at = now + Duration::days(7);
 
-    let session = manager_sessions::ActiveModel {
+    let session = user_sessions::ActiveModel {
         id: ActiveValue::Set(Uuid::new_v4().to_string()),
-        manager_id: ActiveValue::Set(manager.id.clone()),
+        user_id: ActiveValue::Set(user.id.clone()),
         token: ActiveValue::Set(session_token.clone()),
         expires_at: ActiveValue::Set(expires_at),
         created_at: ActiveValue::Set(now),
         updated_at: ActiveValue::Set(now),
     };
 
-    manager_sessions::Entity::insert(session)
+    user_sessions::Entity::insert(session)
         .exec(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Failed to create session: {}", e)))?;
@@ -6408,7 +6408,7 @@ pub async fn verify_magic_link(access_token: String) -> Result<AuthResponse, Ser
 }
 
 #[server]
-pub async fn get_current_manager() -> Result<Option<Manager>, ServerFnError> {
+pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
     let db = get_db().await;
 
     // Get session token from cookies
@@ -6417,7 +6417,7 @@ pub async fn get_current_manager() -> Result<Option<Manager>, ServerFnError> {
         let session_token = extract_session_token_from_request().await?;
 
         if let Some(token) = session_token {
-            return validate_session_and_get_manager(&token, db).await;
+            return validate_session_and_get_user(&token, db).await;
         }
     }
 
@@ -6427,7 +6427,7 @@ pub async fn get_current_manager() -> Result<Option<Manager>, ServerFnError> {
 #[cfg(feature = "server")]
 async fn extract_session_token_from_request() -> Result<Option<String>, ServerFnError> {
     use dioxus::fullstack::FullstackContext;
-    
+
     let server_ctx = FullstackContext::current()
         .expect("Server context should be available");
 
@@ -6460,33 +6460,33 @@ async fn extract_session_token_from_request() -> Result<Option<String>, ServerFn
 }
 
 #[cfg(feature = "server")]
-async fn validate_session_and_get_manager(
+async fn validate_session_and_get_user(
     token: &str,
     db: &sea_orm::DatabaseConnection,
-) -> Result<Option<Manager>, ServerFnError> {
+) -> Result<Option<User>, ServerFnError> {
     let now = Utc::now().naive_utc();
 
     // Find valid session
-    let session = manager_sessions::Entity::find()
-        .filter(manager_sessions::Column::Token.eq(token))
-        .filter(manager_sessions::Column::ExpiresAt.gt(now))
+    let session = user_sessions::Entity::find()
+        .filter(user_sessions::Column::Token.eq(token))
+        .filter(user_sessions::Column::ExpiresAt.gt(now))
         .one(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
 
     if let Some(session) = session {
-        // Get the manager
-        let manager = managers::Entity::find_by_id(&session.manager_id)
+        // Get the user
+        let user = entity_users::Entity::find_by_id(&session.user_id)
             .one(db)
             .await
             .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
 
-        if let Some(manager) = manager {
-            return Ok(Some(Manager {
-                id: manager.id,
-                email: manager.email,
-                name: manager.name,
-                permissions: format!("{:?}", manager.permissions), // Use Debug formatting
+        if let Some(user) = user {
+            return Ok(Some(User {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                admin: user.admin,
                 authenticated: true,
             }));
         }
@@ -6497,26 +6497,25 @@ async fn validate_session_and_get_manager(
 
 #[server]
 pub async fn check_auth() -> Result<bool, ServerFnError> {
-    match get_current_manager().await? {
-        Some(manager) => Ok(manager.authenticated),
+    match get_current_user().await? {
+        Some(user) => Ok(user.authenticated),
         None => Ok(false),
     }
 }
 
 #[server]
 pub async fn check_admin_permission() -> Result<bool, ServerFnError> {
-    match get_current_manager().await? {
-        Some(manager) => {
-            // Check if manager has admin permissions
-            // You can customize this based on your permission system
-            Ok(manager.authenticated && !manager.permissions.is_empty())
+    match get_current_user().await? {
+        Some(user) => {
+            // Check if user has admin privileges
+            Ok(user.admin)
         }
         None => Ok(false),
     }
 }
 
 #[server]
-pub async fn logout_manager() -> Result<AuthResponse, ServerFnError> {
+pub async fn logout_user() -> Result<AuthResponse, ServerFnError> {
     let db = get_db().await;
 
     // Get session token from cookies
@@ -6524,8 +6523,8 @@ pub async fn logout_manager() -> Result<AuthResponse, ServerFnError> {
 
     if let Some(token) = session_token {
         // Delete the session from database
-        manager_sessions::Entity::delete_many()
-            .filter(manager_sessions::Column::Token.eq(&token))
+        user_sessions::Entity::delete_many()
+            .filter(user_sessions::Column::Token.eq(&token))
             .exec(db)
             .await
             .map_err(|e| ServerFnError::new(format!("Failed to delete session: {}", e)))?;
@@ -6557,26 +6556,37 @@ pub async fn logout_manager() -> Result<AuthResponse, ServerFnError> {
 // Legacy function for backward compatibility
 #[server]
 pub async fn logout() -> Result<(), ServerFnError> {
-    logout_manager().await?;
+    logout_user().await?;
     Ok(())
 }
 
-// Helper function to get manager by ID (for internal use)
+// Legacy functions for backward compatibility
 #[server]
-pub async fn admin_get_manager_by_id(manager_id: String) -> Result<Option<Manager>, ServerFnError> {
+pub async fn get_current_manager() -> Result<Option<User>, ServerFnError> {
+    get_current_user().await
+}
+
+#[server]
+pub async fn logout_manager() -> Result<AuthResponse, ServerFnError> {
+    logout_user().await
+}
+
+// Helper function to get user by ID (for internal use)
+#[server]
+pub async fn admin_get_user_by_id(user_id: String) -> Result<Option<User>, ServerFnError> {
     let db = get_db().await;
 
-    let manager = managers::Entity::find_by_id(&manager_id)
+    let user = entity_users::Entity::find_by_id(&user_id)
         .one(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
 
-    if let Some(manager) = manager {
-        Ok(Some(Manager {
-            id: manager.id,
-            email: manager.email,
-            name: manager.name,
-            permissions: format!("{:?}", manager.permissions), // Use Debug formatting
+    if let Some(user) = user {
+        Ok(Some(User {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            admin: user.admin,
             authenticated: true,
         }))
     } else {
@@ -6584,18 +6594,30 @@ pub async fn admin_get_manager_by_id(manager_id: String) -> Result<Option<Manage
     }
 }
 
-// Helper function to check if email exists in managers table
+// Legacy function for backward compatibility
 #[server]
-pub async fn admin_check_manager_email_exists(email: String) -> Result<bool, ServerFnError> {
+pub async fn admin_get_manager_by_id(manager_id: String) -> Result<Option<User>, ServerFnError> {
+    admin_get_user_by_id(manager_id).await
+}
+
+// Helper function to check if email exists in users table
+#[server]
+pub async fn admin_check_user_email_exists(email: String) -> Result<bool, ServerFnError> {
     let db = get_db().await;
 
-    let manager = managers::Entity::find()
-        .filter(managers::Column::Email.eq(&email))
+    let user = entity_users::Entity::find()
+        .filter(entity_users::Column::Email.eq(&email))
         .one(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
 
-    Ok(manager.is_some())
+    Ok(user.is_some())
+}
+
+// Legacy function for backward compatibility
+#[server]
+pub async fn admin_check_manager_email_exists(email: String) -> Result<bool, ServerFnError> {
+    admin_check_user_email_exists(email).await
 }
 
 // Function to clean up expired sessions (can be called periodically)
@@ -6604,8 +6626,8 @@ pub async fn cleanup_expired_sessions() -> Result<u64, ServerFnError> {
     let db = get_db().await;
     let now = Utc::now().naive_utc();
 
-    let result = manager_sessions::Entity::delete_many()
-        .filter(manager_sessions::Column::ExpiresAt.lt(now))
+    let result = user_sessions::Entity::delete_many()
+        .filter(user_sessions::Column::ExpiresAt.lt(now))
         .exec(db)
         .await
         .map_err(|e| ServerFnError::new(format!("Failed to delete expired sessions: {}", e)))?;

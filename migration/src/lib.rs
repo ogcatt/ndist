@@ -31,7 +31,6 @@ mod fix_order_time;
 mod fix_reduce_time;
 mod fix_stock_items;
 mod fix_stock_items_v2;
-mod m20240101_000001_create_manager_sessions_table;
 mod make_batches_items_instead;
 mod make_collections_array;
 mod make_customer_optional;
@@ -48,6 +47,7 @@ mod order_customer_optional;
 mod order_email_list;
 mod rem_assembled_and_add_batches;
 mod remove_old_inventory;
+mod rename_managers_to_userss;
 mod update_order;
 mod add_mechanism_to_products;
 
@@ -57,7 +57,8 @@ pub struct Migrator;
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
-            Box::new(m20240101_000001_create_manager_sessions_table::Migration),
+            /*
+            Box::new(rename_managers_to_users::Migration),
             Box::new(expand_product::Migration),
             Box::new(expand_variants::Migration),
             Box::new(add_collections_to_products::Migration),
@@ -106,7 +107,9 @@ impl MigratorTrait for Migrator {
             Box::new(make_batches_items_instead::Migration),
             Box::new(modify_order_item_foreign_key::Migration),
             Box::new(modify_address_order_foreign_key_cascade::Migration),
-            Box::new(add_mechanism_to_products::Migration)
+            */
+            Box::new(add_mechanism_to_products::Migration),
+            Box::new(rename_managers_to_userss::Migration)
         ]
     }
 }

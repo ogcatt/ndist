@@ -53,7 +53,7 @@ use crate::backend::server_functions::{
 use crate::utils::{capitalize_if_alpha, countries::allowed_countries};
 #[cfg(feature = "server")]
 use entity::{
-    self, address, basket_items, customer_baskets, discounts, manager_sessions, managers, order,
+    self, address, basket_items, customer_baskets, discounts, user_sessions, users, order,
     order_item, payment, product_variant_stock_item_relations, product_variants, products,
     sea_orm_active_enums, stock_active_reduce, stock_backorder_active_reduce, stock_batches,
     stock_item_relations, stock_items, stock_preorder_active_reduce,

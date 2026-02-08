@@ -8,10 +8,9 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use crate::backend::server_functions::{get_or_create_basket, get_products};
-use crate::i18n::{Language, use_language_setter};
 use crate::utils::{GLOBAL_CART, countries::*, filter_products};
 
-use crate::components::{LanguagePopup, SearchResults};
+use crate::components::{AccountButton, AccountMobileButton, AccountPopupProvider, SearchResults};
 
 #[component]
 pub fn Header() -> Element {
@@ -20,18 +19,10 @@ pub fn Header() -> Element {
     let mut mobile_categories_open = use_signal(|| false);
     let mut mobile_about_open = use_signal(|| false);
     let mut mobile_research_open = use_signal(|| false);
-    let mut mobile_languages_open = use_signal(|| false);
-
-    // Location dropdown state
-    let mut location_dropdown_open = use_signal(|| false);
 
     let mut search_bar_open = use_signal(|| false);
 
-    // Language functionality
-    let mut language_setter = use_language_setter();
-
     let mut cart_total_quantity = use_signal(|| 0i32);
-
     // Updated date checks to match svelte version
     let now = Local::now();
     let is_christmas = now.month() == 12 && (now.day() >= 18 && now.day() <= 31);
@@ -76,24 +67,6 @@ pub fn Header() -> Element {
             .unwrap_or(0);
         cart_total_quantity.set(total);
     });
-
-    // Update your handle_language_change function
-    let mut handle_language_change = move |lang_code: &str| {
-        if let Ok(language) = Language::from_str(lang_code) {
-            // Save to storage first
-            if let Err(e) = crate::i18n::set_user_language(language.clone()) {
-                tracing::error!("Failed to save language preference: {}", e);
-            }
-
-            // Update the signal
-            language_setter.set(Some(language));
-
-            // Close dropdowns
-            location_dropdown_open.set(false);
-
-            tracing::info!("Language changed to: {}", lang_code);
-        }
-    };
 
     let mut input_ref = use_signal(|| None::<Rc<MountedData>>);
     let mut search_query = use_signal(|| String::new());
@@ -145,54 +118,53 @@ pub fn Header() -> Element {
     });
 
     rsx! {
-
-        LanguagePopup {}
-
-        if *search_bar_open.read() {
-            div {
-                class: "fixed inset-0 bg-black bg-opacity-20 z-40",
-                onclick: move |_| {
-                    search_bar_open.set(false);
-                    search_query.set(String::new());
-                }
-            }
-
-            div {
-                class: "absolute top-16 left-0 h-20 z-50 bg-gray-100 w-full shadow-lg flex items-center justify-center px-4",
-                input {
-                    class: "w-full max-w-md px-4 py-2 text-black bg-gray-100 border-none focus:outline-none placeholder-gray-500",
-                    placeholder: { t!("search-for-products") },
-                    r#type: "text",
-                    value: "{search_query.read()}",
-                    oninput: move |evt| {
-                        search_query.set(evt.value());
-                    },
-                    onmounted: move |mounted| {
-                        *input_ref.write() = Some(mounted.data());
+        AccountPopupProvider {
+            // Search bar overlay
+            if *search_bar_open.read() {
+                div {
+                    class: "fixed inset-0 bg-black bg-opacity-20 z-40",
+                    onclick: move |_| {
+                        search_bar_open.set(false);
+                        search_query.set(String::new());
                     }
                 }
-            }
 
-            if !search_query.read().is_empty() {
-                if let Some(Ok(products)) = products_data.read().as_ref() {
-                    SearchResults {
-                        products: filter_products(products, &search_query.read()),
-                        search_query: search_query.read().clone(),
-                        on_product_click: move |_| {
-                            search_query.set(String::new()); // Clear search
-                            search_bar_open.set(false); // Close search bar
+                div {
+                    class: "absolute top-16 left-0 h-20 z-50 bg-gray-100 w-full shadow-lg flex items-center justify-center px-4",
+                    input {
+                        class: "w-full max-w-md px-4 py-2 text-black bg-gray-100 border-none focus:outline-none placeholder-gray-500",
+                        placeholder: { t!("search-for-products") },
+                        r#type: "text",
+                        value: "{search_query.read()}",
+                        oninput: move |evt| {
+                            search_query.set(evt.value());
+                        },
+                        onmounted: move |mounted| {
+                            *input_ref.write() = Some(mounted.data());
+                        }
+                    }
+                }
+
+                if !search_query.read().is_empty() {
+                    if let Some(Ok(products)) = products_data.read().as_ref() {
+                        SearchResults {
+                            products: filter_products(products, &search_query.read()),
+                            search_query: search_query.read().clone(),
+                            on_product_click: move |_| {
+                                search_query.set(String::new());
+                                search_bar_open.set(false);
+                            }
                         }
                     }
                 }
             }
-        }
 
-        div {
-            class: "sticky top-0 inset-x-0 z-50",
-            header {
-                class: "relative h-18 mx-auto border-b duration-200 bg-white border-ui-border-base",
-                nav {
-                    class: "content-container txt-xsmall-plus text-ui-fg-subtle flex items-center justify-between w-full h-full text-smm md:text-sm",
+            div {
+                class: "sticky top-0 inset-x-0 z-50",
+                header {
+                    class: "relative h-18 mx-auto border-b duration-200 bg-white border-ui-border-base",
+                    nav {
+                        class: "content-container txt-xsmall-plus text-ui-fg-subtle flex items-center justify-between w-full h-full text-smm md:text-sm",
                     // Left section: Mobile toggle and desktop menus
                     div {
                         class: "flex-1 basis-0 h-full flex items-center",
@@ -483,74 +455,15 @@ pub fn Header() -> Element {
                             }
                         }
                     },
-                    // Right section: Location, Account, Cart
+                    // Right section: Account, Cart
                     div {
                         class: "flex items-center gap-x-6 h-full flex-1 basis-0 justify-end",
-                        // Location button with dropdown (desktop only)
+                        // Account button (desktop only)
                         div {
-                            class: "md:block hidden h-full z-5 relative",
+                            class: "md:block hidden h-full z-8",
                             div {
                                 class: "relative h-full",
-                                button {
-                                    onclick: move |_| {
-                                        location_dropdown_open.set(!location_dropdown_open());
-                                    },
-                                    class: "h-full pointer",
-                                    title: format!("{}", { t!("your-location") }),
-                                    div {
-                                        class: "flex justify-center",
-                                        img {
-                                            class: "fadey",
-                                            //src: asset!("/assets/icons/location-sharp.svg"),
-                                            src: asset!("/assets/icons/language-outline.svg"),
-                                            style: "height:24px;margin-bottom:-1px;"
-                                        }
-                                    }
-                                },
-                                // Location/Language dropdown
-                                if *location_dropdown_open.read() {
-                                    div {
-                                        class: "absolute max-h-96 overflow-y-auto right-0 top-full w-max max-w-[280px] bg-white rounded-b-md shadow-lg z-10 border border-gray-200",
-                                        div {
-                                            class: "p-3 border-b border-gray-100",
-                                            div {
-                                                class: "text-sm font-semibold text-gray-900 mb-1",
-                                                "Language / Region"
-                                            },
-                                            div {
-                                                class: "text-xs text-gray-500",
-                                                "Select your preferred language"
-                                            }
-                                        },
-                                        div {
-                                            class: "py-1",
-                                            for language_option in LANGUAGE_OPTIONS.iter() {
-                                                button {
-                                                    onclick: move |_| handle_language_change(language_option.code),
-                                                    class: "w-full flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                                    div {
-                                                        class: "flex items-center flex-1",
-                                                        div {
-                                                            class: "text-lg mr-3",
-                                                            "{language_option.flag}"
-                                                        },
-                                                        div {
-                                                            class: "text-left",
-                                                            div {
-                                                                class: "font-medium text-gray-900",
-                                                                "{language_option.name}"
-                                                            },
-                                                            div {
-                                                                class: "text-xs text-gray-500",
-                                                                "{language_option.country}"
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                AccountButton {}
                             }
                         },
                         // Search button
@@ -634,7 +547,8 @@ pub fn Header() -> Element {
                         }
                     }
                 }
-            },
+            }
+
             // Mobile menu with updated structure
             if *open_menu.read() {
                 div {
@@ -647,7 +561,6 @@ pub fn Header() -> Element {
                         // Scrollable content area
                         div {
                             class: "flex-1 overflow-y-auto",
-
                             // Main menu items
                             ul {
                                 class: "flex flex-col",
@@ -857,7 +770,6 @@ pub fn Header() -> Element {
                                         }
                                     }
                                 },
-
                                 // Peptide Calculator link
                                 li {
                                     Link {
@@ -868,72 +780,14 @@ pub fn Header() -> Element {
                                     }
                                 }
                             }
-                        },
+                        }
 
-                        // Bottom section - Languages (collapsible)
+                        // Bottom section - Account
                         div {
                             class: "border-t-2 border-gray-200 bg-gray-50 flex-shrink-0",
-
-                            // Language toggle button
-                            button {
-                                onclick: move |_| {
-                                    mobile_languages_open.set(!mobile_languages_open());
-                                },
-                                class: "w-full px-4 py-3 flex items-center text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                img {
-                                    class: "blende mr-3",
-                                    src: asset!("/assets/icons/language-outline.svg"),
-                                    style: "height:20px;"
-                                },
-                                span {
-                                    class: "text-sm font-semibold flex-1 text-left",
-                                    { t!("languages") }
-                                },
-                                span {
-                                    class: "ml-auto",
-                                    img {
-                                        src: asset!("/assets/icons/down-arrow.svg"),
-                                        alt: "",
-                                        width: "12",
-                                        style: if *mobile_languages_open.read() { "" } else { "transform: rotate(180deg);" }
-                                    }
-                                }
-                            },
-
-                            // Language options (collapsible with its own scroll)
-                            if *mobile_languages_open.read() {
-                                div {
-                                    class: "max-h-48 overflow-y-auto bg-white border-t border-gray-200",
-                                    for language_option in LANGUAGE_OPTIONS.iter() {
-                                        button {
-                                            onclick: move |_| {
-                                                handle_language_change(language_option.code);
-                                                open_menu.set(false);
-                                            },
-                                            class: "w-full flex items-center p-3 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-100",
-                                            div {
-                                                class: "flex items-center flex-1",
-                                                div {
-                                                    class: "text-lg mr-3",
-                                                    "{language_option.flag}"
-                                                },
-                                                div {
-                                                    class: "text-left",
-                                                    div {
-                                                        class: "font-medium text-gray-900 text-sm",
-                                                        "{language_option.name}"
-                                                    },
-                                                    div {
-                                                        class: "text-xs text-gray-500",
-                                                        "{language_option.country}"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            AccountMobileButton {}
                         }
+                    }
                     }
                 }
             }

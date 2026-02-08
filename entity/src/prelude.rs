@@ -5,7 +5,7 @@ pub use super::audit_log::Entity as AuditLog;
 pub use super::basket_items::Entity as BasketItems;
 pub use super::customer_baskets::Entity as CustomerBaskets;
 pub use super::customers::Entity as Customers;
-pub use super::managers::Entity as Managers;
+pub use super::users::Entity as Users;
 pub use super::order::Entity as Order;
 pub use super::order_item::Entity as OrderItem;
 pub use super::payment::Entity as Payment;

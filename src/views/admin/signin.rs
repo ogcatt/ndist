@@ -32,7 +32,7 @@ pub fn SignIn() -> Element {
             //rounded-lg relative overflow-hidden p-4 bg-ui-bg-subtle shadow-elevation-card-rest rounded-large group-hover:shadow-elevation-card-hover transition-shadow ease-in-out duration-150 aspect-[1/1] w-full
                 div { class: "text-center",
                     h2 { class: "text-2xl",
-                        "Manager Sign In"
+                        "Admin Sign In"
                     }
                     p { class: "mt-2 text-gray-600",
                         "Enter your email to receive a sign in link."

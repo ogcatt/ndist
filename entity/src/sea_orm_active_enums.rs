@@ -7,8 +7,8 @@ use sea_orm::entity::prelude::*;
 pub enum ActorType {
     #[sea_orm(string_value = "CUSTOMER")]
     Customer,
-    #[sea_orm(string_value = "MANAGER")]
-    Manager,
+    #[sea_orm(string_value = "USER")]
+    User,
     #[sea_orm(string_value = "SYSTEM")]
     System,
 }
@@ -17,7 +17,7 @@ impl std::fmt::Display for ActorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ActorType::Customer => write!(f, "CUSTOMER"),
-            ActorType::Manager => write!(f, "MANAGER"),
+            ActorType::User => write!(f, "USER"),
             ActorType::System => write!(f, "SYSTEM"),
         }
     }
@@ -41,32 +41,7 @@ impl std::fmt::Display for AddressType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "ManagerPermission")]
-pub enum ManagerPermission {
-    #[sea_orm(string_value = "ACCOUNTING")]
-    Accounting,
-    #[sea_orm(string_value = "ADMIN")]
-    Admin,
-    #[sea_orm(string_value = "FULFILLMENT")]
-    Fulfillment,
-    #[sea_orm(string_value = "INVENTORY")]
-    Inventory,
-    #[sea_orm(string_value = "MANAGER")]
-    Manager,
-}
-
-impl std::fmt::Display for ManagerPermission {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ManagerPermission::Accounting => write!(f, "ACCOUNTING"),
-            ManagerPermission::Admin => write!(f, "ADMIN"),
-            ManagerPermission::Fulfillment => write!(f, "FULFILLMENT"),
-            ManagerPermission::Inventory => write!(f, "INVENTORY"),
-            ManagerPermission::Manager => write!(f, "MANAGER"),
-        }
-    }
-}
+// All the code after ActorType until the StockUnit enum
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "OrderStatus")]

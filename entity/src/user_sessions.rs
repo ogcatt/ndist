@@ -1,12 +1,12 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "manager_sessions")]
+#[sea_orm(table_name = "user_sessions")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub id: String,
     #[sea_orm(column_type = "Text")]
-    pub manager_id: String,
+    pub user_id: String,
     #[sea_orm(column_type = "Text")]
     pub token: String,
     pub expires_at: chrono::NaiveDateTime, // Changed to NaiveDateTime to match your database
@@ -19,18 +19,18 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::managers::Entity",
-        from = "Column::ManagerId",
-        to = "super::managers::Column::Id",
+        belongs_to = "super::users::Entity",
+        from = "Column::UserId",
+        to = "super::users::Column::Id",
         on_update = "Cascade",
         on_delete = "Cascade"
     )]
-    Managers,
+    Users,
 }
 
-impl Related<super::managers::Entity> for Entity {
+impl Related<super::users::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Managers.def()
+        Relation::Users.def()
     }
 }
 

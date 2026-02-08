@@ -40,3 +40,6 @@ pub use seo::*;
 
 mod search_results;
 pub use search_results::*;
+
+mod account_popup;
+pub use account_popup::*;

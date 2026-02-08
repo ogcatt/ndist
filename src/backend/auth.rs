@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 use {
     chrono::{Duration, Utc},
-    entity::{manager_sessions, managers},
+    entity::{user_sessions, users},
     sea_orm::{ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter},
     supabase_auth::models::AuthClient,
     uuid::Uuid,
@@ -21,21 +21,21 @@ use {
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Manager {
+pub struct User {
     pub id: String,
     pub email: String,
     pub name: String,
-    pub permissions: String,
+    pub admin: bool,
     pub authenticated: bool,
 }
 
-impl Default for Manager {
+impl Default for User {
     fn default() -> Self {
         Self {
             id: String::new(),
             email: String::new(),
             name: String::new(),
-            permissions: String::new(),
+            admin: false,
             authenticated: false,
         }
     }
@@ -55,7 +55,7 @@ pub struct SupabaseTokenClaims {
 #[derive(Clone)]
 pub struct AppState {
     pub auth_service: std::sync::Arc<AuthService>,
-    pub session_cache: Cache<String, Manager>,
+    pub session_cache: Cache<String, User>,
     pub negative_cache: Cache<String, ()>, // Cache for invalid tokens
 }
 
@@ -87,14 +87,14 @@ impl AuthService {
     }
 
     pub async fn send_magic_link(&self, email: &str) -> Result<(), anyhow::Error> {
-        // Check if manager exists
-        let manager = managers::Entity::find()
-            .filter(managers::Column::Email.eq(email))
+        // Check if user exists
+        let user = users::Entity::find()
+            .filter(users::Column::Email.eq(email))
             .one(&self.db)
             .await?;
 
-        if manager.is_none() {
-            return Err(anyhow::anyhow!("Manager not found"));
+        if user.is_none() {
+            return Err(anyhow::anyhow!("User not found"));
         }
 
         self.supabase_client.send_login_email_with_magic_link(email).await?;
@@ -105,56 +105,56 @@ impl AuthService {
         // Verify the JWT token from Supabase
         let email = self.verify_supabase_token(access_token)?;
 
-        // Find the manager by email
-        let manager = managers::Entity::find()
-            .filter(managers::Column::Email.eq(&email))
+        // Find the user by email
+        let user = users::Entity::find()
+            .filter(users::Column::Email.eq(&email))
             .one(&self.db)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Manager not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("User not found"))?;
 
         // Create a new session
         let session_token = Uuid::new_v4().to_string();
         let now = Utc::now().naive_utc();
         let expires_at = now + Duration::days(120);
 
-        let session = manager_sessions::ActiveModel {
+        let session = user_sessions::ActiveModel {
             id: ActiveValue::Set(Uuid::new_v4().to_string()),
-            manager_id: ActiveValue::Set(manager.id.clone()),
+            user_id: ActiveValue::Set(user.id.clone()),
             token: ActiveValue::Set(session_token.clone()),
             expires_at: ActiveValue::Set(expires_at),
             created_at: ActiveValue::Set(now),
             updated_at: ActiveValue::Set(now),
         };
 
-        manager_sessions::Entity::insert(session)
+        user_sessions::Entity::insert(session)
             .exec(&self.db)
             .await?;
 
         Ok(session_token)
     }
 
-    pub async fn validate_session(&self, token: &str) -> Result<Manager, anyhow::Error> {
+    pub async fn validate_session(&self, token: &str) -> Result<User, anyhow::Error> {
         let now = Utc::now().naive_utc();
 
         // Find valid session
-        let session = manager_sessions::Entity::find()
-            .filter(manager_sessions::Column::Token.eq(token))
-            .filter(manager_sessions::Column::ExpiresAt.gt(now))
+        let session = user_sessions::Entity::find()
+            .filter(user_sessions::Column::Token.eq(token))
+            .filter(user_sessions::Column::ExpiresAt.gt(now))
             .one(&self.db)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Invalid or expired session"))?;
 
-        // Get the manager
-        let manager = managers::Entity::find_by_id(&session.manager_id)
+        // Get the user
+        let user = users::Entity::find_by_id(&session.user_id)
             .one(&self.db)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Manager not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("User not found"))?;
 
-        Ok(Manager {
-            id: manager.id,
-            email: manager.email,
-            name: manager.name,
-            permissions: manager.permissions.to_string(),
+        Ok(User {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            admin: user.admin,
             authenticated: true,
         })
     }
@@ -162,9 +162,9 @@ impl AuthService {
     pub async fn validate_session_with_negative_cache(
         &self,
         token: &str,
-        session_cache: &Cache<String, Manager>,
+        session_cache: &Cache<String, User>,
         negative_cache: &Cache<String, ()>
-    ) -> Result<Manager, anyhow::Error> {
+    ) -> Result<User, anyhow::Error> {
         // Check if token is in negative cache (known to be invalid)
         if negative_cache.get(token).await.is_some() {
             tracing::info!("Token found in negative cache: {}", &token[..8]);
@@ -172,20 +172,20 @@ impl AuthService {
         }
 
         // Check positive cache
-        if let Some(cached_manager) = session_cache.get(token).await {
+        if let Some(cached_user) = session_cache.get(token).await {
             tracing::info!("Session found in positive cache for token: {}", &token[..8]);
-            return Ok(cached_manager);
+            return Ok(cached_user);
         }
 
         tracing::info!("Session not in cache, validating from database for token: {}", &token[..8]);
 
         // Validate from database
         match self.validate_session(token).await {
-            Ok(manager) => {
+            Ok(user) => {
                 // Cache successful validation
-                session_cache.insert(token.to_string(), manager.clone()).await;
+                session_cache.insert(token.to_string(), user.clone()).await;
                 tracing::info!("Session cached successfully for token: {}", &token[..8]);
-                Ok(manager)
+                Ok(user)
             }
             Err(e) => {
                 // Cache failed validation for a short time to avoid repeated DB hits
@@ -199,12 +199,12 @@ impl AuthService {
     pub async fn logout_and_invalidate_cache(
         &self,
         token: &str,
-        session_cache: &Cache<String, Manager>,
+        session_cache: &Cache<String, User>,
         negative_cache: &Cache<String, ()>
     ) -> Result<(), anyhow::Error> {
         // Remove from database
-        manager_sessions::Entity::delete_many()
-            .filter(manager_sessions::Column::Token.eq(token))
+        user_sessions::Entity::delete_many()
+            .filter(user_sessions::Column::Token.eq(token))
             .exec(&self.db)
             .await?;
 
@@ -217,8 +217,8 @@ impl AuthService {
     }
 
     pub async fn logout(&self, token: &str) -> Result<(), anyhow::Error> {
-        manager_sessions::Entity::delete_many()
-            .filter(manager_sessions::Column::Token.eq(token))
+        user_sessions::Entity::delete_many()
+            .filter(user_sessions::Column::Token.eq(token))
             .exec(&self.db)
             .await?;
         Ok(())
@@ -228,12 +228,12 @@ impl AuthService {
     pub async fn invalidate_user_sessions(
         &self,
         user_id: &str,
-        session_cache: &Cache<String, Manager>,
+        session_cache: &Cache<String, User>,
         negative_cache: &Cache<String, ()>
     ) -> Result<(), anyhow::Error> {
         // Remove all sessions for this user from database
-        manager_sessions::Entity::delete_many()
-            .filter(manager_sessions::Column::ManagerId.eq(user_id))
+        user_sessions::Entity::delete_many()
+            .filter(user_sessions::Column::UserId.eq(user_id))
             .exec(&self.db)
             .await?;
 
@@ -241,8 +241,8 @@ impl AuthService {
         // This is less efficient but necessary for user-based invalidation
         session_cache.run_pending_tasks().await;
         let snapshot: Vec<_> = session_cache.iter().collect();
-        for (token, manager) in snapshot {
-            if manager.id == user_id {
+        for (token, user) in snapshot {
+            if user.id == user_id {
                 // Use as_ref() to get &str from Arc<String>
                 session_cache.invalidate(token.as_ref()).await;
                 negative_cache.invalidate(token.as_ref()).await;
@@ -273,16 +273,16 @@ pub async fn auth_middleware(
     let uri = request.uri();
     let path = uri.path();
 
-    // Skip auth for signin and verify routes, and for non-admin routes
-    if path == "/admin/signin"
-        || path.starts_with("/admin/verify")
-        || (!path.starts_with("/admin") && !path.starts_with("/api/admin")) {
+    // Skip auth for signin and verify routes
+    if path == "/admin/signin" || path.starts_with("/admin/verify") {
         return Ok(next.run(request).await);
     }
 
     // Check for session cookie
     let headers = request.headers();
     let cookies = parse_cookies(headers);
+
+    let mut user_opt: Option<User> = None;
 
     if let Some(session_token) = cookies.get("session_token") {
         // Validate the session token using cached validation
@@ -291,10 +291,8 @@ pub async fn auth_middleware(
             &state.session_cache,
             &state.negative_cache
         ).await {
-            Ok(manager) => {
-                // Session is valid, add manager to request extensions
-                request.extensions_mut().insert(manager);
-                return Ok(next.run(request).await);
+            Ok(user) => {
+                user_opt = Some(user);
             }
             Err(e) => {
                 tracing::info!("Session validation failed: {}", e);
@@ -304,8 +302,31 @@ pub async fn auth_middleware(
         }
     }
 
-    // Redirect to signin if no valid session
-    Ok(Redirect::to("/admin/signin").into_response())
+    // Check if this is an admin route that requires authentication
+    if path.starts_with("/admin") || path.starts_with("/api/admin") {
+        match user_opt {
+            Some(user) => {
+                // Check if user has admin privileges for /admin routes
+                if !user.admin {
+                    tracing::info!("Non-admin user {} attempted to access admin route: {}", user.email, path);
+                    return Ok(Redirect::to("/admin/signin").into_response());
+                }
+                // Session is valid, add user to request extensions
+                request.extensions_mut().insert(user);
+                return Ok(next.run(request).await);
+            }
+            None => {
+                // No valid session for admin route - redirect to signin
+                return Ok(Redirect::to("/admin/signin").into_response());
+            }
+        }
+    }
+
+    // For non-admin routes, proceed without requiring authentication
+    if let Some(user) = user_opt {
+        request.extensions_mut().insert(user);
+    }
+    Ok(next.run(request).await)
 }
 
 #[cfg(feature = "server")]
@@ -326,10 +347,10 @@ fn parse_cookies(headers: &HeaderMap) -> HashMap<String, String> {
     cookies
 }
 
-// Helper function to extract authenticated manager from request extensions
+// Helper function to extract authenticated user from request extensions
 #[cfg(feature = "server")]
-pub fn get_authenticated_manager(request: &Request) -> Option<&Manager> {
-    request.extensions().get::<Manager>()
+pub fn get_authenticated_user(request: &Request) -> Option<&User> {
+    request.extensions().get::<User>()
 }
 
 #[cfg(feature = "server")]
