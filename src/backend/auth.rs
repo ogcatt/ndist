@@ -273,8 +273,8 @@ pub async fn auth_middleware(
     let uri = request.uri();
     let path = uri.path();
 
-    // Skip auth for signin and verify routes
-    if path == "/admin/signin" || path.starts_with("/admin/verify") {
+    // Skip auth for certain routes - account popup handles signin
+    if path == "/" || path.starts_with("/api/auth") {
         return Ok(next.run(request).await);
     }
 
@@ -308,16 +308,24 @@ pub async fn auth_middleware(
             Some(user) => {
                 // Check if user has admin privileges for /admin routes
                 if !user.admin {
-                    tracing::info!("Non-admin user {} attempted to access admin route: {}", user.email, path);
-                    return Ok(Redirect::to("/admin/signin").into_response());
+                    tracing::info!("Non-admin user {} attempted to admin route: {}", user.email, path);
+                    // For web requests, redirect to home; for API, return unauthorized
+                    if path.starts_with("/api/admin") {
+                        return Ok(StatusCode::UNAUTHORIZED.into_response());
+                    }
+                    return Ok(Redirect::to("/").into_response());
                 }
                 // Session is valid, add user to request extensions
                 request.extensions_mut().insert(user);
                 return Ok(next.run(request).await);
             }
             None => {
-                // No valid session for admin route - redirect to signin
-                return Ok(Redirect::to("/admin/signin").into_response());
+                // No valid session for admin route - redirect to account popup via home
+                // For API routes, return unauthorized
+                if path.starts_with("/api/admin") {
+                    return Ok(StatusCode::UNAUTHORIZED.into_response());
+                }
+                return Ok(Redirect::to("/").into_response());
             }
         }
     }

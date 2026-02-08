@@ -1,3 +1,4 @@
+//new
 #[cfg(feature = "server")]
 use reqwest;
 #[cfg(feature = "server")]
@@ -34,6 +35,9 @@ impl From<EmailError> for ServerFnError {
 #[derive(Debug, Clone, Serialize)]
 #[cfg(feature = "server")]
 pub enum EmailType {
+    SendOtp {
+        otp_code: String,
+    },
     OrderConfirmation {
         order_id: String,
         order_ref: String,
@@ -80,6 +84,7 @@ impl EmailType {
     // Returns the template ID for each email type
     pub fn template_id(&self) -> u32 {
         match self {
+            EmailType::SendOtp { .. } => 5,
             EmailType::OrderConfirmation { .. } => 4,
             EmailType::OrderConfirmationWithBackorder { .. } => 13,
             EmailType::TrackingConfirmation { .. } => 5,
@@ -95,6 +100,9 @@ impl EmailType {
     // Returns the data payload for the template
     pub fn data(&self) -> Option<serde_json::Value> {
         match self {
+            EmailType::SendOtp { otp_code } => Some(serde_json::json!({
+                "otp_code": otp_code
+            })),
             EmailType::OrderConfirmation {
                 order_id,
                 order_ref,
@@ -262,7 +270,7 @@ struct SubscriberSearchData {
 
 #[cfg(feature = "server")]
 impl EmailService {
-    const EMAIL_LIST_ID: u32 = 6;
+    const EMAIL_LIST_ID: u32 = 1;
 
     // Initialize the email service with environment variables
     pub fn new() -> Result<Self, EmailError> {
@@ -521,6 +529,18 @@ impl EmailService {
 // Convenience functions for specific email types
 #[cfg(feature = "server")]
 impl EmailService {
+    pub async fn send_otp(
+        &self,
+        recipient_email: &str,
+        recipient_name: &str,
+        otp_code: String,
+    ) -> Result<(), EmailError> {
+        let email_type = EmailType::SendOtp { otp_code };
+        // OTP emails are always sent without adding to email list
+        self.send_email(recipient_email, recipient_name, email_type, false)
+            .await
+    }
+
     pub async fn send_order_confirmation(
         &self,
         recipient_email: &str,

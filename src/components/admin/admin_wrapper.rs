@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use dioxus_i18n::t;
 
 use crate::backend::server_functions::*;
+use crate::components::use_account_popup;
 use crate::Route;
 
 #[component]
@@ -19,7 +20,12 @@ pub fn AdminWrapper() -> Element {
         spawn(async move {
             match logout_user().await {
                 Ok(_) => {
-                    navigator.push("/admin/signin");
+                    // Reload page to refresh auth state - the account popup will show on next visit
+                    web_sys::window()
+                        .unwrap()
+                        .location()
+                        .reload()
+                        .unwrap();
                 }
                 Err(e) => {
                     // Handle error

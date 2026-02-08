@@ -1,6 +1,7 @@
 pub use sea_orm_migration::prelude::*;
 
 mod add_active_to_reduces;
+mod add_auth_tokens;
 mod add_basket_locks;
 mod add_blog_posts;
 mod add_cancelled_payments;
@@ -108,6 +109,7 @@ impl MigratorTrait for Migrator {
             Box::new(modify_order_item_foreign_key::Migration),
             Box::new(modify_address_order_foreign_key_cascade::Migration),
             */
+            Box::new(add_auth_tokens::Migration),
             Box::new(add_mechanism_to_products::Migration),
             Box::new(rename_managers_to_userss::Migration)
         ]

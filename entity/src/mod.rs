@@ -4,6 +4,7 @@ pub mod prelude;
 
 pub mod address;
 pub mod audit_log;
+pub mod auth_tokens;
 pub mod basket_items;
 pub mod customer_baskets;
 pub mod customers;

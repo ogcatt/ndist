@@ -31,8 +31,8 @@ use entity::{
 };
 #[cfg(feature = "server")]
 use sea_orm::{
-    self, ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter, QuerySelect,
-    TransactionTrait,
+    self, ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter,
+    QuerySelect, TransactionTrait,
 }; // Required for database operations
 
 use chrono::NaiveDateTime;
@@ -69,6 +69,124 @@ use std::error::Error;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+
+// Rate limiting cache for OTP and verification attempts
+// Uses in-memory storage with automatic cleanup
+#[cfg(feature = "server")]
+mod otp_rate_limit {
+    use chrono::{Duration, Utc};
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use once_cell::sync::Lazy;
+
+    #[derive(Debug, Clone)]
+    struct RateLimitEntry {
+        email: String,
+        minute_count: u32,
+        day_count: u32,
+        last_send_time: Option<chrono::DateTime<Utc>>,
+        verify_attempts: u32,
+        last_verify_time: Option<chrono::DateTime<Utc>>,
+    }
+
+    // In-memory cache using Mutex for simplicity
+    // In production, consider using a proper cache like redis
+    static RATE_LIMIT_CACHE: Lazy<Mutex<HashMap<String, RateLimitEntry>>> =
+        Lazy::new(|| Mutex::new(HashMap::new()));
+
+    const MINUTE_LIMIT: u32 = 5;
+    const DAY_LIMIT: u32 = 20;
+    const VERIFY_LIMIT: u32 = 5;
+    const SEND_COOLDOWN_SECS: i64 = 30;
+
+    pub fn check_send_rate_limit(email: &str) -> Result<(), String> {
+        let mut cache = RATE_LIMIT_CACHE.lock().unwrap();
+        let now = Utc::now();
+
+        let entry = cache.entry(email.to_string()).or_insert_with(|| RateLimitEntry {
+            email: email.to_string(),
+            minute_count: 0,
+            day_count: 0,
+            last_send_time: None,
+            verify_attempts: 0,
+            last_verify_time: None,
+        });
+
+        // Check cooldown period
+        if let Some(last_time) = entry.last_send_time {
+            if now.signed_duration_since(last_time).num_seconds() < SEND_COOLDOWN_SECS {
+                let remaining = SEND_COOLDOWN_SECS - now.signed_duration_since(last_time).num_seconds();
+                return Err(format!("Please wait {} seconds before requesting a new code.", remaining));
+            }
+        }
+
+        // Check minute limit
+        let one_minute_ago = now - Duration::minutes(1);
+        if entry.last_send_time.map_or(false, |t| t > one_minute_ago) {
+            entry.minute_count += 1;
+        } else {
+            entry.minute_count = 1;
+        }
+
+        // Check day limit
+        let one_day_ago = now - Duration::days(1);
+        if entry.last_send_time.map_or(false, |t| t > one_day_ago) {
+            entry.day_count += 1;
+        } else {
+            entry.day_count = 1;
+        }
+
+        // Update last send time
+        entry.last_send_time = Some(now);
+
+        // Enforce limits
+        if entry.minute_count > MINUTE_LIMIT {
+            return Err("Too many requests this minute. Please try again later.".to_string());
+        }
+        if entry.day_count > DAY_LIMIT {
+            return Err("Daily limit reached. Please try again tomorrow.".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn check_verify_rate_limit(email: &str) -> Result<(), String> {
+        let mut cache = RATE_LIMIT_CACHE.lock().unwrap();
+        let now = Utc::now();
+
+        let entry = cache.entry(email.to_string()).or_insert_with(|| RateLimitEntry {
+            email: email.to_string(),
+            minute_count: 0,
+            day_count: 0,
+            last_send_time: None,
+            verify_attempts: 0,
+            last_verify_time: None,
+        });
+
+        // Reset verify attempts if last attempt was more than a minute ago
+        let one_minute_ago = now - Duration::minutes(1);
+        if entry.last_verify_time.map_or(false, |t| t > one_minute_ago) {
+            entry.verify_attempts += 1;
+        } else {
+            entry.verify_attempts = 1;
+        }
+
+        entry.last_verify_time = Some(now);
+
+        if entry.verify_attempts > VERIFY_LIMIT {
+            return Err("Too many verification attempts. Please request a new code.".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn reset_send_cooldown(email: &str) {
+        let mut cache = RATE_LIMIT_CACHE.lock().unwrap();
+        if let Some(entry) = cache.get_mut(email) {
+            entry.last_send_time = None;
+        }
+    }
+}
 
 use super::front_entities::*;
 
@@ -6633,4 +6751,256 @@ pub async fn cleanup_expired_sessions() -> Result<u64, ServerFnError> {
         .map_err(|e| ServerFnError::new(format!("Failed to delete expired sessions: {}", e)))?;
 
     Ok(result.rows_affected)
+}
+
+// OTP Authentication Types
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VerifyOtpResponse {
+    pub session_token: Option<String>,
+    pub is_new_user: bool,
+    pub message: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct OtpRequest {
+    pub email: String,
+    pub otp_code: String,
+}
+
+// OTP generation using rand
+#[cfg(feature = "server")]
+fn generate_otp_code() -> String {
+    let code: u32 = rand::random::<u32>() % 900000 + 100000;
+    format!("{:06}", code)
+}
+
+// Send OTP email
+#[server]
+pub async fn send_otp(email: String) -> Result<AuthResponse, ServerFnError> {
+    use entity::auth_tokens;
+    use regex::Regex;
+
+    let db = get_db().await;
+    let now = Utc::now();
+
+    // Email regex validation
+    let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+        .map_err(|_| ServerFnError::new("Invalid regex".to_string()))?;
+
+    if !email_regex.is_match(&email) {
+        return Ok(AuthResponse {
+            success: false,
+            message: "Email does not match email pattern (typed incorrectly).".to_string(),
+        });
+    }
+
+    // Check rate limiting using the cache
+    match otp_rate_limit::check_send_rate_limit(&email) {
+        Ok(()) => {}
+        Err(msg) => {
+            return Ok(AuthResponse {
+                success: false,
+                message: msg,
+            });
+        }
+    }
+
+    // Generate 6-digit OTP
+    let otp_code = generate_otp_code();
+
+    // Create OTP (auth_token) entry
+    let auth_token = auth_tokens::ActiveModel {
+        id: ActiveValue::Set(Uuid::new_v4().to_string()),
+        email: ActiveValue::Set(email.clone()),
+        otp_code: ActiveValue::Set(otp_code.clone()),
+        used: ActiveValue::Set(false),
+        attempts: ActiveValue::Set(0),
+        expires_at: ActiveValue::Set((now + Duration::minutes(20)).naive_utc()),
+        created_at: ActiveValue::Set(now.naive_utc()),
+    };
+
+    // Insert the auth token into the database
+    auth_tokens::Entity::insert(auth_token)
+        .exec(db)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+
+    // Send OTP email using EmailService
+    let email_service = crate::backend::email::EmailService::new()
+        .map_err(|e| ServerFnError::new(format!("Email service error: {}", e)))?;
+
+    match email_service.send_otp(&email, &email, otp_code).await {
+        Ok(()) => Ok(AuthResponse {
+            success: true,
+            message: "OTP sent to your email.".to_string(),
+        }),
+        Err(e) => {
+            tracing::info!("Could not send email on server side: {e:?}");
+            Ok(AuthResponse {
+                success: false,
+                message: format!("Could not send email. Error: {:?}", e),
+            })
+        }
+    }
+}
+
+// Verify OTP and create session
+#[server]
+pub async fn verify_otp(email: String, otp_code: String) -> Result<VerifyOtpResponse, ServerFnError> {
+    use entity::auth_tokens;
+
+    // Check rate limiting for verification attempts
+    match otp_rate_limit::check_verify_rate_limit(&email) {
+        Ok(()) => {}
+        Err(msg) => {
+            return Ok(VerifyOtpResponse {
+                session_token: None,
+                is_new_user: false,
+                message: Some(msg),
+            });
+        }
+    }
+
+    let db = get_db().await;
+    let now = Utc::now();
+
+    // Find the active auth_token for the given email
+    let otp_token = match auth_tokens::Entity::find()
+        .filter(auth_tokens::Column::Email.eq(&email))
+        .filter(auth_tokens::Column::Used.eq(false))
+        .filter(auth_tokens::Column::ExpiresAt.gt(now.naive_utc()))
+        .one(db)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
+    {
+        Some(token) => token,
+        None => {
+            return Ok(VerifyOtpResponse {
+                session_token: None,
+                is_new_user: false,
+                message: Some("Invalid or expired OTP.".to_string()),
+            });
+        }
+    };
+
+    // Check attempts limit before verifying OTP
+    if otp_token.attempts >= 5 {
+        return Ok(VerifyOtpResponse {
+            session_token: None,
+            is_new_user: false,
+            message: Some("Too many verification attempts. Please request a new code.".to_string()),
+        });
+    }
+
+    // Check if OTP code matches
+    if otp_token.otp_code != otp_code {
+        // Incorrect OTP: Increment attempts
+        let new_attempts = otp_token.attempts + 1;
+        let mut updated_otp = otp_token.into_active_model();
+        updated_otp.attempts = ActiveValue::Set(new_attempts);
+        auth_tokens::Entity::update(updated_otp)
+            .exec(db)
+            .await
+            .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+
+        return Ok(VerifyOtpResponse {
+            session_token: None,
+            is_new_user: false,
+            message: Some("Invalid OTP code.".to_string()),
+        });
+    }
+
+    // OTP is valid: Mark as used and reset attempts
+    let mut updated_otp = otp_token.into_active_model();
+    updated_otp.used = ActiveValue::Set(true);
+    updated_otp.attempts = ActiveValue::Set(0);
+    auth_tokens::Entity::update(updated_otp)
+        .exec(db)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+
+    // Check if user exists with the given email
+    let existing_user = entity_users::Entity::find()
+        .filter(entity_users::Column::Email.eq(&email))
+        .one(db)
+        .await
+        .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+
+    let is_new_user = existing_user.is_none();
+
+    // Create session token
+    let session_token = Uuid::new_v4().to_string();
+    let expires_at = now + Duration::days(180);
+
+    if let Some(user) = existing_user {
+        // User exists: Create a new session token
+        let session = user_sessions::ActiveModel {
+            id: ActiveValue::Set(Uuid::new_v4().to_string()),
+            user_id: ActiveValue::Set(user.id.clone()),
+            token: ActiveValue::Set(session_token.clone()),
+            expires_at: ActiveValue::Set(expires_at.naive_utc()),
+            created_at: ActiveValue::Set(now.naive_utc()),
+            updated_at: ActiveValue::Set(now.naive_utc()),
+        };
+
+        user_sessions::Entity::insert(session)
+            .exec(db)
+            .await
+            .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+    } else {
+        // New user: Create user with email as name, then create session
+        let new_user = entity_users::ActiveModel {
+            id: ActiveValue::Set(Uuid::new_v4().to_string()),
+            email: ActiveValue::Set(email.clone()),
+            name: ActiveValue::Set(email.clone()), // Use email as name
+            admin: ActiveValue::Set(false),
+            created_at: ActiveValue::Set(now.naive_utc()),
+            updated_at: ActiveValue::Set(now.naive_utc()),
+        };
+
+        let inserted_user = entity_users::Entity::insert(new_user)
+            .exec_with_returning(db)
+            .await
+            .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+
+        // Create session for new user
+        let session = user_sessions::ActiveModel {
+            id: ActiveValue::Set(Uuid::new_v4().to_string()),
+            user_id: ActiveValue::Set(inserted_user.id.clone()),
+            token: ActiveValue::Set(session_token.clone()),
+            expires_at: ActiveValue::Set(expires_at.naive_utc()),
+            created_at: ActiveValue::Set(now.naive_utc()),
+            updated_at: ActiveValue::Set(now.naive_utc()),
+        };
+
+        user_sessions::Entity::insert(session)
+            .exec(db)
+            .await
+            .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+    }
+
+    // Set the session cookie
+    #[cfg(feature = "server")]
+    {
+        use axum::http::HeaderValue;
+        use dioxus::fullstack::FullstackContext;
+
+        let cookie_value = format!(
+            "session_token={}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=15552000",
+            session_token
+        );
+
+        let server_ctx = FullstackContext::current()
+            .expect("Server context should be available");
+        let header_value = HeaderValue::from_str(&cookie_value)
+            .map_err(|e| ServerFnError::new(format!("Invalid cookie value: {}", e)))?;
+
+        server_ctx.add_response_header(axum::http::header::SET_COOKIE, header_value);
+    }
+
+    Ok(VerifyOtpResponse {
+        session_token: Some(session_token),
+        is_new_user,
+        message: None,
+    })
 }

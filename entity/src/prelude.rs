@@ -2,9 +2,11 @@
 
 pub use super::address::Entity as Address;
 pub use super::audit_log::Entity as AuditLog;
+pub use super::auth_tokens::Entity as AuthTokens;
 pub use super::basket_items::Entity as BasketItems;
 pub use super::customer_baskets::Entity as CustomerBaskets;
 pub use super::customers::Entity as Customers;
+pub use super::user_sessions::Entity as UserSessions;
 pub use super::users::Entity as Users;
 pub use super::order::Entity as Order;
 pub use super::order_item::Entity as OrderItem;
