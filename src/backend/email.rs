@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 use std::env;
 
+#[cfg(feature = "server")]
+use dioxus::prelude::ServerFnError;
+
 // Error types for better error handling
 #[derive(Debug, thiserror::Error)]
 #[cfg(feature = "server")]
@@ -17,6 +20,14 @@ pub enum EmailError {
     SerializationError(#[from] serde_json::Error),
     #[error("API error: {message}")]
     ApiError { message: String },
+}
+
+// Implement From<EmailError> for ServerFnError to allow ? operator
+#[cfg(feature = "server")]
+impl From<EmailError> for ServerFnError {
+    fn from(err: EmailError) -> Self {
+        ServerFnError::new(err.to_string())
+    }
 }
 
 // Email data types for different templates

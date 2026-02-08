@@ -1,7 +1,6 @@
 use crate::Route;
 use dioxus::prelude::*;
 use dioxus_i18n::t;
-use dioxus_router::prelude::*;
 use lazy_regex::regex;
 use std::time::Duration;
 
@@ -588,7 +587,7 @@ pub fn Checkout() -> Element {
                                         option {
                                             value: iso.clone(),
                                             selected: *current_country.read() == *iso,
-                                            key: iso.clone(),
+                                            key: "{iso}",
                                             { display.clone() }
                                         }
                                     }
@@ -892,7 +891,7 @@ pub fn Checkout() -> Element {
                                     div { class: "flex flex-wrap gap-2",
                                         for crypto in ["BTC", "BCH", "LTC", "XMR", "USDT (BEP-20/TRC-20)", "USDC (BEP-20/TRC-20)"] {
                                             span {
-                                                key: crypto,
+                                                key: "{crypto}",
                                                 class: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200",
                                                 {crypto}
                                             }

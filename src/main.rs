@@ -242,7 +242,7 @@ async fn main() {
 
     let upload_path = get_upload_path();
     let router = axum::Router::new()
-        .serve_dioxus_application(ServeConfigBuilder::default(), App)
+        .serve_dioxus_application(dioxus::server::ServeConfig::default(), App)
         // Add sitemap endpoint
         .route("/sitemap.xml", axum::routing::get(sitemap_handler))
         // Add robots.txt endpoint

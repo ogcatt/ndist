@@ -26,6 +26,8 @@ use std::env;
 #[cfg(feature = "server")]
 use std::pin::Pin;
 #[cfg(feature = "server")]
+use super::server_functions::DbErrExt;
+#[cfg(feature = "server")]
 use thiserror::Error;
 #[cfg(feature = "server")]
 use tokio::join;
@@ -130,6 +132,13 @@ pub enum ValidationError {
 #[error("Validation failed: {0:?}")]
 pub struct ValidationErrors(pub Vec<ValidationError>);
 
+// Implement From trait to allow using ? operator with ValidationErrors in server functions
+impl From<ValidationErrors> for ServerFnError {
+    fn from(err: ValidationErrors) -> Self {
+        ServerFnError::new(format!("Validation error: {}", err))
+    }
+}
+
 // Create the payment and associated order. This is triggered at the end stage of checkout.
 #[server]
 pub async fn init_payment_and_order(
@@ -150,8 +159,7 @@ pub async fn init_payment_and_order(
     customer_baskets::Entity::update_many()
         .col_expr(customer_baskets::Column::Locked, Expr::value(true))
         .filter(customer_baskets::Column::Id.eq(&basket_id))
-        .exec(db)
-        .await?;
+        .exec(db).await.map_db_err()?;
 
     // Get products with variants at the same time
     let products_fut = products::Entity::find()
@@ -203,13 +211,13 @@ pub async fn init_payment_and_order(
     );
 
     let products_with_variants: Vec<(products::Model, Vec<product_variants::Model>)> =
-        products_res?;
-    let basket_entity = basket_res?;
-    let basket_items_entity = basket_items_res?;
-    let discounts_entities = discounts_res?;
-    let stock_batches_entities = stock_batches_res?;
-    let stock_relations_entities = stock_relations_res?;
-    let variant_stock_relations_entities = variant_stock_relations_res?;
+        products_res.map_db_err()?;
+    let basket_entity = basket_res.map_db_err()?;
+    let basket_items_entity = basket_items_res.map_db_err()?;
+    let discounts_entities = discounts_res.map_db_err()?;
+    let stock_batches_entities = stock_batches_res.map_db_err()?;
+    let stock_relations_entities = stock_relations_res.map_db_err()?;
+    let variant_stock_relations_entities = variant_stock_relations_res.map_db_err()?;
     let stock_results_entities = stock_quantities_res?;
 
     // Extract products and variants from the tuple structure for the stock reduces function
@@ -657,7 +665,7 @@ pub async fn init_payment_and_order(
     //tracing::info!("{:?}", bitcart_payment);
 
     //--- START DATABASE TRANSACTIONS ---
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
 
     // Generate unique IDs
     let order_id = Uuid::new_v4().to_string();
@@ -690,7 +698,7 @@ pub async fn init_payment_and_order(
         updated_at: Set(now),
     };
 
-    let order_result = order.insert(&txn).await?;
+    let order_result = order.insert(&txn).await.map_db_err()?;
 
     // Create order item entities LINKED TO order
 
@@ -729,7 +737,7 @@ pub async fn init_payment_and_order(
 
     // Insert all order items in the transaction
     for order_item in order_items {
-        order_item.insert(&txn).await?;
+        order_item.insert(&txn).await.map_db_err()?;
     }
 
     // Create shipping address entity LINKED TO order
@@ -753,7 +761,7 @@ pub async fn init_payment_and_order(
         updated_at: Set(now),
     };
 
-    let address_result = address.insert(&txn).await?;
+    let address_result = address.insert(&txn).await.map_db_err()?;
 
     // Create payment entity LINKED TO order
 
@@ -770,17 +778,17 @@ pub async fn init_payment_and_order(
         updated_at: Set(now),
     };
 
-    let payment_result = payment.insert(&txn).await?;
+    let payment_result = payment.insert(&txn).await.map_db_err()?;
 
     // Link PAYMENT ID to cart:
 
     let mut basket_active = basket_mod.clone().into_active_model();
     basket_active.payment_id = Set(Some(payment_id.clone()));
-    basket_active.update(&txn).await?;
+    basket_active.update(&txn).await.map_db_err()?;
 
     // Create active reduce entries LINKED TO order
 
-    let stock_items_entities: Vec<stock_items::Model> = stock_items::Entity::find().all(db).await?;
+    let stock_items_entities: Vec<stock_items::Model> = stock_items::Entity::find().all(db).await.map_db_err()?;
 
     let reduces_to_add = create_stock_reduces(
         basket_items_entity,
@@ -809,13 +817,11 @@ pub async fn init_payment_and_order(
         if let Some(disc) = discount_match {
             let mut discount_active = disc.clone().into_active_model();
             discount_active.active_reduce_quantity = Set(disc.active_reduce_quantity + 1);
-            discount_active.update(&txn).await?;
+            discount_active.update(&txn).await.map_db_err()?;
         }
     }
 
-    // FINALLY EXECUTE THE DATABASE TRANSACTIONS
-
-    txn.commit().await?;
+    // FINALLY EXECUTE THE DATABASE TRANSACTIONS txn.commit().await.map_db_err()?;
 
     // Temporary return
     tracing::info!("SUCCESS FOR PAYMENT CREATION");
@@ -836,8 +842,9 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
 
     let (payment_res, basket_res) = join!(payment_fut, basket_fut);
 
-    let basket_entity = basket_res?;
-    let payment_mod = payment_res?
+    let basket_entity = basket_res.map_db_err()?;
+    let payment_mod = payment_res
+        .map_db_err()?
         .unwrap_or_else(|| panic!("Could not get payment by payment id (does it exist?)..."));
 
     let order_id = payment_mod
@@ -855,9 +862,10 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
 
     let (address_res, order_res) = join!(address_fut, order_fut);
 
-    let address_entity = address_res?;
-    let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+    let address_entity = address_res.map_db_err()?;
+    let order_mod = order_res
+        .map_db_err()?
+        .unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
 
     let customer_email = order_mod.customer_email.clone();
     let customer_name = if let Some(address) = address_entity {
@@ -867,26 +875,23 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
     };
 
     // Start seaorm transaction
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
     let now = Utc::now().naive_utc();
 
     // Delete stock active reduces
     stock_active_reduce::Entity::delete_many()
         .filter(stock_active_reduce::Column::OrderId.eq(&order_id))
-        .exec(&txn)
-        .await?;
+        .exec(&txn).await.map_db_err()?;
 
     // Delete pre-order active reduces
     stock_preorder_active_reduce::Entity::delete_many()
         .filter(stock_preorder_active_reduce::Column::OrderId.eq(&order_id))
-        .exec(&txn)
-        .await?;
+        .exec(&txn).await.map_db_err()?;
 
     // Delete backorder active reduces
     stock_backorder_active_reduce::Entity::delete_many()
         .filter(stock_backorder_active_reduce::Column::OrderId.eq(&order_id))
-        .exec(&txn)
-        .await?;
+        .exec(&txn).await.map_db_err()?;
 
     // Remove payment id from basket
     if let Some(basket) = basket_entity {
@@ -896,7 +901,7 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
         if expire {
             basket_active.payment_failed_at = Set(Some(now));
         }
-        basket_active.update(&txn).await?;
+        basket_active.update(&txn).await.map_db_err()?;
     } // If it can't find the basket don't modify it (it should be able to however)
 
     // Update payment entity status to expired
@@ -907,20 +912,19 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
         sea_orm_active_enums::PaymentStatus::Cancelled
     });
     payment_active.order_id = Set(None);
-    payment_active.update(&txn).await?;
+    payment_active.update(&txn).await.map_db_err()?;
 
     // If discount exists on order, remove active reduce
     if let Some(ref discount_id) = order_mod.discount_id {
         let discount_entity = discounts::Entity::find()
             .filter(discounts::Column::Id.eq(discount_id))
-            .one(db)
-            .await?;
+            .one(db).await.map_db_err()?;
 
         if let Some(discount) = discount_entity {
             let mut discount_active = discount.clone().into_active_model();
             discount_active.active_reduce_quantity =
                 Set((discount.active_reduce_quantity - 1).max(0));
-            discount_active.update(&txn).await?;
+            discount_active.update(&txn).await.map_db_err()?;
         } // If fails fetch ignore (discount was probably deleted)
     }
 
@@ -931,22 +935,18 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
         // Delete address associated with failed order
         address::Entity::delete_many()
             .filter(address::Column::OrderId.eq(&order_id))
-            .exec(&txn)
-            .await?;
+            .exec(&txn).await.map_db_err()?;
 
         // Delete order items
         order_item::Entity::delete_many()
             .filter(order_item::Column::OrderId.eq(&order_id))
-            .exec(&txn)
-            .await?;
+            .exec(&txn).await.map_db_err()?;
 
         // Delete order
         order_mod
             .delete(&txn) // Delete the order within the transaction
-            .await?;
-    }
-
-    txn.commit().await?;
+            .await.map_db_err()?;
+    } txn.commit().await.map_db_err()?;
 
     if !expire {
         delete_bitcart_payment(&payment_id).await;
@@ -985,8 +985,9 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
 
     let (payment_res, basket_res) = join!(payment_fut, basket_fut);
 
-    let basket_entity = basket_res?;
-    let payment_mod = payment_res?
+    let basket_entity = basket_res.map_db_err()?;
+    let payment_mod = payment_res
+        .map_db_err()?
         .unwrap_or_else(|| panic!("Could not get payment by payment id (does it exist?)..."));
 
     let order_id = payment_mod
@@ -1009,18 +1010,18 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
     let (address_res, order_res, backorder_reduces_res) =
         join!(address_fut, order_fut, backorder_reduces_fut);
 
-    let address_entity = address_res?;
-    let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
-    let backorder_reduces = backorder_reduces_res?;
+    let address_entity = address_res.map_db_err()?;
+    let order_mod = order_res
+        .map_db_err()?
+        .unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+    let backorder_reduces = backorder_reduces_res.map_db_err()?;
 
     let stock_active_reduces_mod = stock_active_reduce::Entity::find()
         .filter(stock_active_reduce::Column::OrderId.eq(&order_id))
-        .all(db)
-        .await?;
+        .all(db).await.map_db_err()?;
 
     // Start seaorm transaction
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
     let now = Utc::now().naive_utc();
 
     // UPDATE PAYMENT AS PAID
@@ -1028,28 +1029,27 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
     let mut payment_active = payment_mod.clone().into_active_model();
     payment_active.status = Set(sea_orm_active_enums::PaymentStatus::Paid);
     payment_active.paid_at = Set(Some(now));
-    payment_active.update(&txn).await?;
+    payment_active.update(&txn).await.map_db_err()?;
 
     // UPDATE ORDER AS PAID
 
     let mut order_active = order_mod.clone().into_active_model();
     order_active.status = Set(sea_orm_active_enums::OrderStatus::Paid);
-    order_active.update(&txn).await?;
+    order_active.update(&txn).await.map_db_err()?;
 
     // FLATTEN DISCOUNT ACTIVE REDUCE
 
     if let Some(ref discount_id) = order_mod.discount_id {
         let discount_entity = discounts::Entity::find()
             .filter(discounts::Column::Id.eq(discount_id))
-            .one(db)
-            .await?;
+            .one(db).await.map_db_err()?;
 
         if let Some(discount) = discount_entity {
             let mut discount_active = discount.clone().into_active_model();
             discount_active.active_reduce_quantity =
                 Set((discount.active_reduce_quantity - 1).max(0));
             discount_active.discount_used = Set(discount.discount_used + 1);
-            discount_active.update(&txn).await?;
+            discount_active.update(&txn).await.map_db_err()?;
         } // If fails fetch ignore (discount was probably deleted)
     }
 
@@ -1058,15 +1058,13 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
 
         basket_items::Entity::delete_many()
             .filter(basket_items::Column::BasketId.eq(&basket.id))
-            .exec(&txn)
-            .await?;
+            .exec(&txn).await.map_db_err()?;
 
         // DELETE CART
 
         customer_baskets::Entity::delete_many()
             .filter(customer_baskets::Column::Id.eq(&basket.id))
-            .exec(&txn)
-            .await?;
+            .exec(&txn).await.map_db_err()?;
     }
 
     // UPDATE STOCK BACKORDER/PREORDER REDUCE ENTRIES AS ACTIVE
@@ -1078,8 +1076,7 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
             Expr::value(true),
         )
         .filter(stock_backorder_active_reduce::Column::OrderId.eq(&order_mod.id))
-        .exec(&txn)
-        .await?;
+        .exec(&txn).await.map_db_err()?;
 
     // Update stock_preorder_active_reduce entries
     stock_preorder_active_reduce::Entity::update_many()
@@ -1088,10 +1085,7 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
             Expr::value(true),
         )
         .filter(stock_preorder_active_reduce::Column::OrderId.eq(&order_mod.id))
-        .exec(&txn)
-        .await?;
-
-    txn.commit().await?;
+        .exec(&txn).await.map_db_err()?; txn.commit().await.map_db_err()?;
 
     // FLATTEN STOCK ITEM ACTIVE REDUCES
 
@@ -1146,8 +1140,7 @@ pub async fn check_payments() -> Result<(), ServerFnError> {
     let pending_payments = payment::Entity::find()
         .filter(payment::Column::Status.eq(sea_orm_active_enums::PaymentStatus::Pending))
         .find_also_related(order::Entity)
-        .all(db)
-        .await?;
+        .all(db).await.map_db_err()?;
 
     // Process each pending payment
     for (payment, order_opt) in pending_payments {
@@ -1207,8 +1200,7 @@ pub async fn check_payment(payment_id: &str) -> Result<PaymentShortInfo, ServerF
 
     let payment = payment::Entity::find()
         .filter(payment::Column::Id.eq(payment_id))
-        .one(db)
-        .await?
+        .one(db).await.map_db_err()?
         .expect("Could not get payment model when trying to check payment");
 
     let order_id_temp = payment.order_id.clone();
@@ -1227,8 +1219,7 @@ pub async fn check_payment(payment_id: &str) -> Result<PaymentShortInfo, ServerF
 
     let order = order::Entity::find()
         .filter(order::Column::Id.eq(&order_id))
-        .one(db)
-        .await?
+        .one(db).await.map_db_err()?
         .expect("Could not order related to payment");
 
     let ref_code = order.ref_code;
@@ -1299,8 +1290,7 @@ pub async fn unlock_cart(basket_id: &str) -> Result<(), ServerFnError> {
     // Find the basket record in the database
     let basket_entity = customer_baskets::Entity::find()
         .filter(customer_baskets::Column::Id.eq(basket_id))
-        .one(db)
-        .await?;
+        .one(db).await.map_db_err()?;
 
     if let Some(basket_model) = basket_entity.clone() {
         let mut basket_active: customer_baskets::ActiveModel = basket_model.into();
@@ -1308,8 +1298,7 @@ pub async fn unlock_cart(basket_id: &str) -> Result<(), ServerFnError> {
 
         // Save the updated basket
         customer_baskets::Entity::update(basket_active)
-            .exec(db)
-            .await?;
+            .exec(db).await.map_db_err()?;
     } else {
         // Do nothing (soft error if the basket doesn't exist)
     }
@@ -1626,20 +1615,20 @@ fn process_stock_item_requirement_with_cache(
 pub async fn insert_stock_reduces(
     reduces_result: StockReducesResult,
     txn: &DatabaseTransaction,
-) -> Result<(), DbErr> {
+) -> Result<(), ServerFnError> {
     // Insert regular reduces
     for reduce in reduces_result.regular_reduces {
-        reduce.insert(txn).await?;
+        reduce.insert(txn).await.map_db_err()?;
     }
 
     // Insert preorder reduces
     for reduce in reduces_result.preorder_reduces {
-        reduce.insert(txn).await?;
+        reduce.insert(txn).await.map_db_err()?;
     }
 
     // Insert backorder reduces
     for reduce in reduces_result.backorder_reduces {
-        reduce.insert(txn).await?;
+        reduce.insert(txn).await.map_db_err()?;
     }
 
     Ok(())
@@ -1650,15 +1639,14 @@ pub async fn flatten_stock_reduces(
     reduces: Vec<stock_active_reduce::Model>,
 ) -> Result<(), ServerFnError> {
     let db = get_db().await;
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
 
     // Process each reduce
     for reduce in reduces {
         // Find the corresponding stock batch
         let batch = stock_batches::Entity::find()
             .filter(stock_batches::Column::Id.eq(&reduce.stock_batch_id))
-            .one(&txn)
-            .await?;
+            .one(&txn).await.map_db_err()?;
 
         if let Some(batch_model) = batch {
             // Update the live quantity
@@ -1670,17 +1658,15 @@ pub async fn flatten_stock_reduces(
             batch_active.updated_at = Set(Utc::now().naive_utc());
 
             // Update the batch
-            batch_active.update(&txn).await?;
+            batch_active.update(&txn).await.map_db_err()?;
         }
 
         // Delete the reduce entry
         stock_active_reduce::Entity::delete_by_id(&reduce.id)
-            .exec(&txn)
-            .await?;
+            .exec(&txn).await.map_db_err()?;
     }
 
-    // Commit the transaction
-    txn.commit().await?;
+    // Commit the transaction txn.commit().await.map_db_err()?;
     Ok(())
 }
 
@@ -1689,23 +1675,21 @@ pub async fn flatten_preorder_backorder_reduces(
     stock_item_id: String,
 ) -> Result<(), ServerFnError> {
     let db = get_db().await;
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
 
     // Get all active backorder reduces for the specific stock item, ordered by creation date (oldest first)
     let backorder_reduces = stock_backorder_active_reduce::Entity::find()
         .filter(stock_backorder_active_reduce::Column::Active.eq(true))
         .filter(stock_backorder_active_reduce::Column::StockItemId.eq(&stock_item_id))
         .order_by_asc(stock_backorder_active_reduce::Column::CreatedAt)
-        .all(&txn)
-        .await?;
+        .all(&txn).await.map_db_err()?;
 
     // Get all active preorder reduces for the specific stock item, ordered by creation date (oldest first)
     let preorder_reduces = stock_preorder_active_reduce::Entity::find()
         .filter(stock_preorder_active_reduce::Column::Active.eq(true))
         .filter(stock_preorder_active_reduce::Column::StockItemId.eq(&stock_item_id))
         .order_by_asc(stock_preorder_active_reduce::Column::CreatedAt)
-        .all(&txn)
-        .await?;
+        .all(&txn).await.map_db_err()?;
 
     // Process backorders first (higher priority)
     for reduce in backorder_reduces {
@@ -1725,8 +1709,7 @@ pub async fn flatten_preorder_backorder_reduces(
         }
     }
 
-    // Commit the transaction
-    txn.commit().await?;
+    // Commit the transaction txn.commit().await.map_db_err()?;
     Ok(())
 }
 
@@ -1749,7 +1732,7 @@ where
         .filter(stock_batches::Column::LiveQuantity.gt(0.0))
         .order_by_asc(stock_batches::Column::CreatedAt) // Process oldest batches first (FIFO)
         .all(txn)
-        .await?;
+        .await.map_db_err()?;
 
     // Check if we can fulfill this reduce with available stock
     let total_available: f64 = available_batches
@@ -1777,7 +1760,7 @@ where
         let mut batch_active: stock_batches::ActiveModel = batch.into();
         batch_active.live_quantity = Set(new_live_quantity);
         batch_active.updated_at = Set(Utc::now().naive_utc());
-        batch_active.update(txn).await?;
+        batch_active.update(txn).await.map_db_err()?;
 
         remaining_to_reduce -= reduction_from_this_batch;
     }
@@ -1786,11 +1769,11 @@ where
     if is_backorder {
         stock_backorder_active_reduce::Entity::delete_by_id(&reduce.id)
             .exec(txn)
-            .await?;
+            .await.map_db_err()?;
     } else {
         stock_preorder_active_reduce::Entity::delete_by_id(&reduce.id)
             .exec(txn)
-            .await?;
+            .await.map_db_err()?;
     }
 
     Ok(())

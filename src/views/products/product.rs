@@ -1070,7 +1070,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                 let thumbnail_clone = thumbnail_url.clone();
                                                                 rsx! {
                                                                     div {
-                                                                        key: "main-thumb",
+                                                                        key: "{\"main-thumb\"}",
                                                                         class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
                                                                         onclick: move |_| preview_url.set(thumbnail_clone.clone()),
                                                                         img {

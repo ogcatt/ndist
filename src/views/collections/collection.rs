@@ -475,7 +475,7 @@ pub fn Collection(codename: ReadOnlySignal<String>) -> Element {
                                     CSelectItem {
                                         value: "all",
                                         selected: selected_form().is_none(),
-                                        key: "all",
+                                        key: "{\"all\"}",
                                         "All Forms"
                                     }
                                     for form in ProductForm::iter() {
@@ -515,7 +515,7 @@ pub fn Collection(codename: ReadOnlySignal<String>) -> Element {
                                     CSelectItem {
                                         value: "all",
                                         selected: selected_phase().is_none(),
-                                        key: "all",
+                                        key: "{\"all\"}",
                                         "All Phases"
                                     }
                                     for phase in ProductPhase::iter() {

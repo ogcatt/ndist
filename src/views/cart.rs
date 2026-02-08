@@ -366,14 +366,7 @@ pub fn Cart() -> Element {
                     tracing::error!("Failed to update basket discount code: {:?}", e);
                     discount_added.set(false);
                     // Handle server errors (database issues, etc.)
-                    match e {
-                        ServerFnError::ServerError(error_msg) => {
-                            discount_error_line.set(error_msg);
-                        }
-                        _ => {
-                            discount_error_line.set(t!("discount-error"));
-                        }
-                    }
+                    discount_error_line.set(e.to_string());
                 }
             }
         }
@@ -561,7 +554,7 @@ pub fn Cart() -> Element {
                                     rsx! {
                                         for item in lines.into_iter() {
                                             tr {
-                                                key: item.basket_item_id.clone(),
+                                                key: "{item.basket_item_id.clone()}",
                                                 class: "h-24 md:h-32 bg-ui-bg-base hover:bg-ui-bg-base-hover border-ui-border-base transition-fg border-b [&_td:last-child]:pr-8 [&_th:last-child]:pr-8 [&_td:first-child]:pl-8 [&_th:first-child]:pl-8 w-full",
                                                 // Thumb
                                                 td { class: "h-12 !pl-0 p-4 md:pr-6 md:w-24 w-12",
@@ -1004,7 +997,7 @@ pub fn Cart() -> Element {
                                                     option {
                                                         value: iso.clone(),
                                                         selected: *current_country.read() == *iso,
-                                                        key: iso.clone(),
+                                                        key: "{iso}",
                                                         { display.clone() }
                                                     }
                                                 }

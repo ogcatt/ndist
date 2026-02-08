@@ -3,7 +3,7 @@ use dioxus_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
-use strum::{Display, EnumIter, EnumString};
+use strum_macros::{Display, EnumIter, EnumString};
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct Product {
@@ -242,16 +242,25 @@ impl fmt::Display for CheckCartResult {
 
 // Enums
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
+#[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
 pub enum ProductForm {
+    #[strum(to_string = "Ampoule")]
     Ampoule,
+    #[strum(to_string = "Capsules")]
     Capsules,
+    #[strum(to_string = "Container")]
     Container,
+    #[strum(to_string = "DirectSpray")]
     DirectSpray,
+    #[strum(to_string = "Multi")]
     Multi,
+    #[strum(to_string = "Other")]
     Other,
+    #[strum(to_string = "Solution")]
     Solution,
+    #[strum(to_string = "VerticalSpray")]
     VerticalSpray,
+    #[strum(to_string = "Vial")]
     Vial,
 }
 
@@ -285,12 +294,6 @@ impl ProductForm {
     }
 }
 
-impl fmt::Display for ProductForm {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
-
 #[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
 pub enum ProductVisibility {
     #[strum(to_string = "Private")]
@@ -311,7 +314,7 @@ pub enum ProductPhase {
     Orange,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
 pub enum Category {
     Nootropics,
     PBIOs,

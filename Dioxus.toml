@@ -5,6 +5,10 @@
 # HTML title tag content
 title = "Novel Distributions"
 
+# Optimize WASM bundle size
+[web.wasm-opt]
+# Enable wasm-opt optimization
+level = 4  # Maximum optimization (0-4)
 
 # include `assets` in web platform
 [web.resource]

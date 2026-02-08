@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 
 #[derive(Props, PartialEq, Clone)]
 pub struct MetaPageProps {

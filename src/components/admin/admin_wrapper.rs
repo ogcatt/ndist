@@ -1,6 +1,5 @@
 // Add the router prelude to your imports
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 use dioxus_i18n::t;
 
 use crate::backend::server_functions::*;

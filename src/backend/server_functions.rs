@@ -2,7 +2,6 @@
 
 // IMPORTANT: Admin server routes must be prefixed with admin_
 
-use dioxus::prelude::server_fn::error::NoCustomError;
 use dioxus::prelude::*;
 
 // Allow payments access with server_functions::payments
@@ -36,7 +35,10 @@ use sea_orm::{
     TransactionTrait,
 }; // Required for database operations
 
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
+
+#[cfg(feature = "server")]
+use chrono::{DateTime, Duration, Utc};
 #[cfg(feature = "server")]
 use futures;
 #[cfg(feature = "server")]
@@ -76,12 +78,39 @@ use super::entity_conversions;
 #[cfg(feature = "server")]
 use super::media_optimise::*;
 
+// Helper trait to convert sea_orm::DbErr to ServerFnError
+// Since we can't implement From<sea_orm::DbErr> for ServerFnError (orphan rule),
+// we provide a helper method instead
+#[cfg(feature = "server")]
+pub trait DbErrExt<T> {
+    fn map_db_err(self) -> Result<T, ServerFnError>;
+}
+
+#[cfg(feature = "server")]
+impl<T> DbErrExt<T> for Result<T, sea_orm::DbErr> {
+    fn map_db_err(self) -> Result<T, ServerFnError> {
+        self.map_err(|e| {
+            let anyhow_err: anyhow::Error = e.into();
+            anyhow_err.into()
+        })
+    }
+}
+
+// Implement From trait for validator::ValidationErrors to allow using ? in server functions
+// Commented out as validator crate is not currently in dependencies
+// #[cfg(feature = "server")]
+// impl From<validator::ValidationErrors> for ServerFnError {
+//     fn from(err: validator::ValidationErrors) -> Self {
+//         ServerFnError::new(format!("Validation error: {}", err))
+//     }
+// }
+
 /*
 #[server]
 pub async fn test_db() -> Result<usize, ServerFnError> {
     let db = get_db();
 
-    let db_products: Vec<products::Model> = products::Entity::find().all(db.await).await?;
+    let db_products: Vec<products::Model> = products::Entity::find().all(db.await).await.map_db_err()?;
     tracing::info!("{:#?}", db_products);
 
 
@@ -131,8 +160,8 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
     );
 
     // Handle results
-    let products_with_variants = products_with_variants_result?;
-    let variant_relations = variant_relations_result?;
+    let products_with_variants = products_with_variants_result.map_db_err()?;
+    let variant_relations = variant_relations_result.map_db_err()?;
     let stock_qty_results = stock_qty_results_result?;
 
     // Separate products and create contexts
@@ -172,7 +201,8 @@ pub async fn admin_get_products(convert_markdown: bool) -> Result<Vec<Product>, 
         products::Entity::find()
             .find_with_related(product_variants::Entity)
             .all(db.await)
-            .await?;
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // Separate products and create contexts
     let (product_models, contexts): (Vec<_>, Vec<_>) = products_with_variants
@@ -212,7 +242,7 @@ pub async fn admin_get_stock_items() -> Result<Vec<StockItem>, ServerFnError> {
 
     // Load inventory items and related data
     let stock_items_models: Vec<stock_items::Model> =
-        stock_items::Entity::find().all(db.await).await?;
+        stock_items::Entity::find().all(db.await).await.map_db_err()?;
 
     // Get stock quantities for all stock items
     let stock_quantities = get_stock_quantities_for_stock_items(Some(
@@ -240,7 +270,7 @@ pub async fn admin_get_stock_batches() -> Result<Vec<StockBatch>, ServerFnError>
 
     // Load inventory batches and related data
     let stock_batches_models: Vec<stock_batches::Model> =
-        stock_batches::Entity::find().all(db.await).await?;
+        stock_batches::Entity::find().all(db.await).await.map_db_err()?;
 
     let stock_batches = entity_conversions::convert_stock_batches_batch(stock_batches_models);
 
@@ -253,7 +283,7 @@ pub async fn admin_get_stock_item_relations() -> Result<Vec<StockItemRelation>, 
 
     // Load inventory batches and related data
     let stock_item_relations_models: Vec<stock_item_relations::Model> =
-        stock_item_relations::Entity::find().all(db.await).await?;
+        stock_item_relations::Entity::find().all(db.await).await.map_db_err()?;
 
     let stock_item_relations =
         entity_conversions::convert_stock_item_relations_batch(stock_item_relations_models);
@@ -270,7 +300,8 @@ pub async fn admin_get_product_variant_stock_item_relations()
     let stock_relations_models: Vec<product_variant_stock_item_relations::Model> =
         product_variant_stock_item_relations::Entity::find()
             .all(db.await)
-            .await?;
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     let stock_relations =
         entity_conversions::convert_variant_stock_item_relations_batch(stock_relations_models);
@@ -283,7 +314,7 @@ pub async fn admin_get_discounts() -> Result<Vec<Discount>, ServerFnError> {
     let db = get_db();
 
     // Load inventory batches and related data
-    let discount_models: Vec<discounts::Model> = discounts::Entity::find().all(db.await).await?;
+    let discount_models: Vec<discounts::Model> = discounts::Entity::find().all(db.await).await.map_db_err()?;
 
     let discounts_final = entity_conversions::convert_discounts_batch(discount_models);
 
@@ -313,8 +344,8 @@ pub async fn admin_get_pre_or_back_order_reduces(
     );
 
     // Handle results and convert to the shared struct
-    let back_order_models = back_order_result?;
-    let pre_order_models = pre_order_result?;
+    let back_order_models = back_order_result.map_db_err()?;
+    let pre_order_models = pre_order_result.map_db_err()?;
 
     let back_orders: Vec<BackOrPreOrderActiveReduce> = back_order_models
         .into_iter()
@@ -357,7 +388,8 @@ pub async fn admin_get_blog_post(id: String) -> Result<BlogPost, ServerFnError> 
     let blog_post_model: blog_posts::Model = blog_posts::Entity::find()
         .filter(blog_posts::Column::Id.eq(&id))
         .one(db.await)
-        .await?
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
         .expect("Could not get blog post model when fetching singleton");
 
     let blog_post_final = entity_conversions::convert_blog_post(blog_post_model, false)?;
@@ -370,7 +402,7 @@ pub async fn admin_get_blog_posts() -> Result<Vec<BlogPost>, ServerFnError> {
     let db = get_db();
 
     // Load inventory batches and related data
-    let blog_post_models: Vec<blog_posts::Model> = blog_posts::Entity::find().all(db.await).await?;
+    let blog_post_models: Vec<blog_posts::Model> = blog_posts::Entity::find().all(db.await).await.map_db_err()?;
     let blog_posts_final = entity_conversions::convert_blog_posts_batch(blog_post_models, false)?;
 
     Ok(blog_posts_final)
@@ -381,7 +413,7 @@ pub async fn get_blog_posts() -> Result<Vec<BlogPost>, ServerFnError> {
     let db = get_db();
 
     // Load inventory batches and related data
-    let blog_post_models: Vec<blog_posts::Model> = blog_posts::Entity::find().all(db.await).await?;
+    let blog_post_models: Vec<blog_posts::Model> = blog_posts::Entity::find().all(db.await).await.map_db_err()?;
     let blog_posts_final = entity_conversions::convert_blog_posts_batch(blog_post_models, true)?;
 
     Ok(blog_posts_final)
@@ -409,6 +441,14 @@ impl std::fmt::Display for CartError {
 
 impl std::error::Error for CartError {}
 
+// Implement From<CartError> for ServerFnError
+#[cfg(feature = "server")]
+impl From<CartError> for ServerFnError {
+    fn from(err: CartError) -> Self {
+        ServerFnError::new(err.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum BasketError {
     DatabaseError(String),
@@ -428,11 +468,20 @@ impl std::fmt::Display for BasketError {
 
 impl std::error::Error for BasketError {}
 
+// Implement From<BasketError> for ServerFnError
+#[cfg(feature = "server")]
+impl From<BasketError> for ServerFnError {
+    fn from(err: BasketError) -> Self {
+        ServerFnError::new(err.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum CookieError {
     ExtractionError(String),
     ParsingError(String),
     SettingError(String),
+    NoContext,
 }
 
 impl std::fmt::Display for CookieError {
@@ -441,12 +490,28 @@ impl std::fmt::Display for CookieError {
             CookieError::ExtractionError(msg) => write!(f, "Extraction error: {}", msg),
             CookieError::ParsingError(msg) => write!(f, "Parsing error: {}", msg),
             CookieError::SettingError(msg) => write!(f, "Setting error: {}", msg),
+            CookieError::NoContext => write!(f, "No server context available"),
         }
     }
 }
 
 #[cfg(feature = "server")]
 impl std::error::Error for CookieError {}
+
+// Implement From<CookieError> for ServerFnError
+#[cfg(feature = "server")]
+impl From<CookieError> for ServerFnError {
+    fn from(err: CookieError) -> Self {
+        ServerFnError::new(err.to_string())
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<StockCalculationError> for ServerFnError {
+    fn from(err: StockCalculationError) -> Self {
+        ServerFnError::new(err.to_string())
+    }
+}
 
 // Type alias for easier reading
 #[cfg(feature = "server")]
@@ -511,13 +576,13 @@ pub async fn get_or_create_basket() -> Result<CustomerBasket, ServerFnError> {
             discounts::Entity::find().all(db)
         );
 
-        // Handle results using `?` to coerce into ServerFnError<NoCustomError>
-        let basket = basket_result?;
-        let mut basket_items = basket_items_result?;
-        let products_with_variants = products_with_variants_result?;
-        let variant_relations = variant_relations_result?;
+        // Handle results using map_db_err to convert sea_orm::DbErr to ServerFnError
+        let basket = basket_result.map_db_err()?;
+        let mut basket_items = basket_items_result.map_db_err()?;
+        let products_with_variants = products_with_variants_result.map_db_err()?;
+        let variant_relations = variant_relations_result.map_db_err()?;
         let stock_qty_results = stock_qty_results_result?;
-        let discounts = discounts_result?;
+        let discounts = discounts_result.map_db_err()?;
 
         if let Some(basket_model) = basket {
             // Check and update cart if there are items
@@ -598,7 +663,7 @@ pub async fn get_or_create_basket() -> Result<CustomerBasket, ServerFnError> {
                         let mut basket_update: customer_baskets::ActiveModel = basket_model.into();
                         basket_update.discount_code = ActiveValue::Set(None);
 
-                        basket_update.update(db).await?;
+                        basket_update.update(db).await.map_db_err()?;
                     }
                 }
             }
@@ -842,7 +907,7 @@ pub async fn check_cart(
     variant_relations: Vec<product_variant_stock_item_relations::Model>,
     stock_quantities: Vec<StockQuantityResult>,
     //discounts: discounts::Model
-) -> Result<(Vec<basket_items::Model>, Vec<CheckCartResult>), CartError> {
+) -> Result<(Vec<basket_items::Model>, Vec<CheckCartResult>), ServerFnError> {
     let db = get_db().await;
     let mut results = Vec::new();
     let mut items_to_remove = Vec::new();
@@ -972,7 +1037,8 @@ pub async fn check_cart(
         // Delete from database
         basket_items::Entity::delete_by_id(&removed_item.id)
             .exec(db)
-            .await?;
+            .await
+            .map_db_err()?;
     }
 
     // Update quantities in database for modified items
@@ -981,7 +1047,7 @@ pub async fn check_cart(
             let mut active_model: basket_items::ActiveModel = basket_item.clone().into();
             active_model.quantity = ActiveValue::Set(basket_item.quantity);
 
-            basket_items::Entity::update(active_model).exec(db).await?;
+            basket_items::Entity::update(active_model).exec(db).await.map_db_err()?;
         }
     }
 
@@ -1070,11 +1136,12 @@ fn parse_cookies_from_string(cookie_str: &str) -> HashMap<String, String> {
 
 #[cfg(feature = "server")]
 async fn get_basket_id_from_cookie() -> Result<Option<String>, CookieError> {
-    use dioxus::prelude::server_context;
-
+    use dioxus::fullstack::FullstackContext;
+    
     // Access request headers via Dioxus server context
-    let server_ctx = server_context();
-    let request_parts = server_ctx.request_parts();
+    let server_ctx = FullstackContext::current()
+        .expect("Server context should be available");
+    let request_parts = server_ctx.parts_mut();
 
     // Try both lowercase and capitalized forms for compatibility
     let cookie_header = request_parts
@@ -1097,7 +1164,7 @@ async fn get_basket_id_from_cookie() -> Result<Option<String>, CookieError> {
 #[cfg(feature = "server")]
 async fn set_basket_id_cookie(basket_id: String) -> Result<(), CookieError> {
     use axum::http::{HeaderValue, header::SET_COOKIE};
-    use dioxus::prelude::server_context;
+    use dioxus::fullstack::FullstackContext;
 
     let cookie_value = format!(
         "customer_basket_id={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
@@ -1106,15 +1173,13 @@ async fn set_basket_id_cookie(basket_id: String) -> Result<(), CookieError> {
     );
 
     // Access response headers via Dioxus server context
-    let server_ctx = server_context();
+    let server_ctx = FullstackContext::current()
+        .expect("Server context should be available");
     let header_value = HeaderValue::from_str(&cookie_value)
         .map_err(|e| CookieError::SettingError(format!("Invalid cookie value: {}", e)))?;
 
     // Multiple Set-Cookie headers are allowed; append instead of overwrite
-    server_ctx
-        .response_parts_mut()
-        .headers
-        .append(SET_COOKIE, header_value);
+    server_ctx.add_response_header(SET_COOKIE, header_value);
 
     Ok(())
 }
@@ -1178,13 +1243,13 @@ pub async fn get_short_order(order_id: String) -> Result<OrderShortInfo, ServerF
         pre_order_fut
     );
 
-    let order_items = order_item_res?;
-    let payments = payments_res?;
-    let stock_backorder_active_reduces = stock_backorder_active_reduces_res?;
-    let pre_orders_entity = pre_order_res?;
+    let order_items = order_item_res.map_db_err()?;
+    let payments = payments_res.map_db_err()?;
+    let stock_backorder_active_reduces = stock_backorder_active_reduces_res.map_db_err()?;
+    let pre_orders_entity = pre_order_res.map_db_err()?;
 
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
 
     let mut order_short_items: Vec<OrderShortItem> = vec![];
 
@@ -1314,13 +1379,13 @@ pub async fn admin_get_orders(get_expired: bool) -> Result<Vec<OrderInfo>, Serve
         pre_orders_fut
     );
 
-    let orders_entity = orders_res?;
-    let addresses_entity = addresses_res?;
-    let order_items_entity = order_items_res?;
-    let payments_entity = payments_res?;
-    let backorder_reduces_entity = backorder_reduces_res?;
-    let preorder_reduces_entity = preorder_reduces_res?;
-    let pre_orders_entity = pre_orders_res?;
+    let orders_entity = orders_res.map_db_err()?;
+    let addresses_entity = addresses_res.map_db_err()?;
+    let order_items_entity = order_items_res.map_db_err()?;
+    let payments_entity = payments_res.map_db_err()?;
+    let backorder_reduces_entity = backorder_reduces_res.map_db_err()?;
+    let preorder_reduces_entity = preorder_reduces_res.map_db_err()?;
+    let pre_orders_entity = pre_orders_res.map_db_err()?;
 
     // Create OrderInfos
     let mut order_infos: Vec<OrderInfo> = vec![];
@@ -1477,7 +1542,8 @@ pub async fn admin_set_order_status(
             let order = order::Entity::find()
                 .filter(order::Column::Id.eq(order_id))
                 .one(db)
-                .await?
+                .await
+                .map_db_err()?
                 .expect("Could not get order model when trying to update status");
 
             // Convert to ActiveModel and update the status
@@ -1485,7 +1551,7 @@ pub async fn admin_set_order_status(
             order_active.status = ActiveValue::Set(status.to_seaorm());
 
             // Save the updated order
-            order::Entity::update(order_active).exec(db).await?;
+            order::Entity::update(order_active).exec(db).await.map_db_err()?;
         }
     }
 
@@ -1499,7 +1565,8 @@ pub async fn admin_set_order_prepared(order_id: String) -> Result<(), ServerFnEr
     let order = order::Entity::find()
         .filter(order::Column::Id.eq(order_id))
         .one(db)
-        .await?
+        .await
+        .map_db_err()?
         .expect("Could not get order model when trying to update status");
 
     let now = Utc::now().naive_utc();
@@ -1509,7 +1576,7 @@ pub async fn admin_set_order_prepared(order_id: String) -> Result<(), ServerFnEr
     order_active.prepared_at = ActiveValue::Set(Some(now));
 
     // Save the updated order
-    order::Entity::update(order_active).exec(db).await?;
+    order::Entity::update(order_active).exec(db).await.map_db_err()?;
 
     Ok(())
 }
@@ -1526,7 +1593,8 @@ pub async fn admin_set_preorder_prepared(
     let parent_order = order::Entity::find()
         .filter(order::Column::Id.eq(&parent_order_id))
         .one(db)
-        .await?
+        .await
+        .map_db_err()?
         .ok_or_else(|| ServerFnError::new("Parent order not found"))?;
 
     // Get the order item with its associated product variant
@@ -1534,7 +1602,8 @@ pub async fn admin_set_preorder_prepared(
         .filter(order_item::Column::Id.eq(&order_item_id))
         .find_also_related(product_variants::Entity)
         .one(db)
-        .await?
+        .await
+        .map_db_err()?
         .ok_or_else(|| ServerFnError::new("Order item not found"))?;
 
     let (order_item, variant) = order_item_with_variant;
@@ -1565,7 +1634,7 @@ pub async fn admin_set_preorder_prepared(
     };
 
     // Insert the new pre-order
-    pre_order::Entity::insert(new_preorder).exec(db).await?;
+    pre_order::Entity::insert(new_preorder).exec(db).await.map_db_err()?;
 
     Ok(())
 }
@@ -1587,9 +1656,9 @@ pub async fn admin_set_order_fulfilled(
 
     let (address_res, order_res) = tokio::join!(address_fut, order_fut);
 
-    let address_entity = address_res?;
+    let address_entity = address_res.map_db_err()?;
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
 
     let now = Utc::now().naive_utc();
 
@@ -1600,7 +1669,7 @@ pub async fn admin_set_order_fulfilled(
     order_active.tracking_url = ActiveValue::Set(Some(tracking_url.clone()));
 
     // Save the updated order
-    order::Entity::update(order_active).exec(db).await?;
+    order::Entity::update(order_active).exec(db).await.map_db_err()?;
 
     // Send the fulfillment email
 
@@ -1659,10 +1728,10 @@ pub async fn admin_set_pre_order_fulfilled(
     let (address_res, order_res, pre_order_res) =
         tokio::join!(address_fut, order_fut, pre_order_fut);
 
-    let address_entity = address_res?;
+    let address_entity = address_res.map_db_err()?;
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
-    let pre_order_mod = pre_order_res?
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+    let pre_order_mod = pre_order_res.map_db_err()?
         .unwrap_or_else(|| panic!("Could not get pre order by pre_order_id (does it exist?)..."));
 
     let now = Utc::now().naive_utc();
@@ -1673,7 +1742,7 @@ pub async fn admin_set_pre_order_fulfilled(
     pre_order_active.tracking_url = ActiveValue::Set(Some(tracking_url.clone()));
 
     // Save the updated order
-    pre_order::Entity::update(pre_order_active).exec(db).await?;
+    pre_order::Entity::update(pre_order_active).exec(db).await.map_db_err()?;
 
     // Send the fulfillment email
 
@@ -1723,9 +1792,9 @@ pub async fn admin_express_fulfilled_notracking(order_id: String) -> Result<(), 
 
     let (address_res, order_res) = tokio::join!(address_fut, order_fut);
 
-    let address_entity = address_res?;
+    let address_entity = address_res.map_db_err()?;
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
 
     let now = Utc::now().naive_utc();
 
@@ -1735,7 +1804,7 @@ pub async fn admin_express_fulfilled_notracking(order_id: String) -> Result<(), 
     order_active.fulfilled_at = ActiveValue::Set(Some(now));
 
     // Save the updated order
-    order::Entity::update(order_active).exec(db).await?;
+    order::Entity::update(order_active).exec(db).await.map_db_err()?;
 
     // Send the fulfillment email
 
@@ -1792,10 +1861,10 @@ pub async fn admin_express_pre_order_fulfilled_notracking(
     let (address_res, order_res, pre_order_res) =
         tokio::join!(address_fut, order_fut, pre_order_fut);
 
-    let address_entity = address_res?;
+    let address_entity = address_res.map_db_err()?;
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
-    let pre_order_mod = pre_order_res?
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+    let pre_order_mod = pre_order_res.map_db_err()?
         .unwrap_or_else(|| panic!("Could not get pre order by pre_order_id (does it exist?)..."));
 
     let now = Utc::now().naive_utc();
@@ -1805,7 +1874,7 @@ pub async fn admin_express_pre_order_fulfilled_notracking(
     pre_order_active.fulfilled_at = ActiveValue::Set(Some(now));
 
     // Save the updated order
-    pre_order::Entity::update(pre_order_active).exec(db).await?;
+    pre_order::Entity::update(pre_order_active).exec(db).await.map_db_err()?;
 
     // Send the fulfillment email
 
@@ -1857,9 +1926,9 @@ pub async fn admin_express_order_send_tracking(
 
     let (address_res, order_res) = tokio::join!(address_fut, order_fut);
 
-    let address_entity = address_res?;
+    let address_entity = address_res.map_db_err()?;
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
 
     let now = Utc::now().naive_utc();
 
@@ -1868,7 +1937,7 @@ pub async fn admin_express_order_send_tracking(
     order_active.tracking_url = ActiveValue::Set(Some(tracking_url.clone()));
 
     // Save the updated order
-    order::Entity::update(order_active).exec(db).await?;
+    order::Entity::update(order_active).exec(db).await.map_db_err()?;
 
     // Send the fulfillment email
 
@@ -1926,10 +1995,10 @@ pub async fn admin_express_pre_order_send_tracking(
     let (address_res, order_res, pre_order_res) =
         tokio::join!(address_fut, order_fut, pre_order_fut);
 
-    let address_entity = address_res?;
+    let address_entity = address_res.map_db_err()?;
     let order_mod =
-        order_res?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
-    let pre_order_mod = pre_order_res?
+        order_res.map_db_err()?.unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
+    let pre_order_mod = pre_order_res.map_db_err()?
         .unwrap_or_else(|| panic!("Could not get pre order by pre_order_id (does it exist?)..."));
 
     let now = Utc::now().naive_utc();
@@ -1939,7 +2008,7 @@ pub async fn admin_express_pre_order_send_tracking(
     pre_order_active.tracking_url = ActiveValue::Set(Some(tracking_url.clone()));
 
     // Save the updated order
-    pre_order::Entity::update(pre_order_active).exec(db).await?;
+    pre_order::Entity::update(pre_order_active).exec(db).await.map_db_err()?;
 
     // Send the fulfillment email
 
@@ -2029,11 +2098,11 @@ pub async fn add_or_update_basket_item(
             .all(db),
     );
 
-    let products_with_variants = products_with_variants_res?;
-    let variant_relations = variant_relations_res?;
+    let products_with_variants = products_with_variants_res.map_db_err()?;
+    let variant_relations = variant_relations_res.map_db_err()?;
     let stock_quantities = stock_quantities_res?;
-    let auto_apply_discounts = auto_apply_discounts_res?;
-    let current_basket_items = current_basket_items_res?;
+    let auto_apply_discounts = auto_apply_discounts_res.map_db_err()?;
+    let current_basket_items = current_basket_items_res.map_db_err()?;
 
     // Build stock map
     let stock_map: std::collections::HashMap<String, StockQuantityResult> = stock_quantities
@@ -2133,7 +2202,7 @@ pub async fn add_or_update_basket_item(
     };
 
     // Start transaction and upsert/update
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
 
     let status;
     if allowed_total <= 0 {
@@ -2141,7 +2210,7 @@ pub async fn add_or_update_basket_item(
         if let Some(existing_item) = existing_item_opt {
             basket_items::Entity::delete_by_id(existing_item.id.clone())
                 .exec(&txn)
-                .await?;
+                .await.map_db_err()?;
         }
         status = "Removed".to_string();
     } else {
@@ -2151,7 +2220,7 @@ pub async fn add_or_update_basket_item(
             if existing_item.quantity != allowed_total {
                 let mut am: basket_items::ActiveModel = existing_item.into();
                 am.quantity = ActiveValue::Set(allowed_total);
-                basket_items::Entity::update(am).exec(&txn).await?;
+                basket_items::Entity::update(am).exec(&txn).await.map_db_err()?;
                 status = if allowed_total < desired_total {
                     "Reduced".to_string()
                 } else {
@@ -2169,7 +2238,7 @@ pub async fn add_or_update_basket_item(
                 variant_id: ActiveValue::Set(variant_id.clone()),
                 quantity: ActiveValue::Set(allowed_total),
             };
-            basket_items::Entity::insert(new_bi).exec(&txn).await?;
+            basket_items::Entity::insert(new_bi).exec(&txn).await.map_db_err()?;
             status = if allowed_total < desired_total {
                 "Reduced".to_string()
             } else {
@@ -2181,7 +2250,7 @@ pub async fn add_or_update_basket_item(
     // Check for auto-apply discounts after basket modification
     let updated_basket_model = customer_baskets::Entity::find_by_id(&basket_id)
         .one(&txn)
-        .await?
+        .await.map_db_err()?
         .expect("Basket should exist");
 
     // Only check auto-apply discounts if we have a country code
@@ -2191,7 +2260,7 @@ pub async fn add_or_update_basket_item(
             let updated_basket_items = basket_items::Entity::find()
                 .filter(basket_items::Column::BasketId.eq(&basket_id))
                 .all(&txn)
-                .await?;
+                .await.map_db_err()?;;
 
             // Convert products_with_variants to flat variant list
             let variants: Vec<product_variants::Model> = products_with_variants
@@ -2234,12 +2303,12 @@ pub async fn add_or_update_basket_item(
                 basket_am.discount_code = ActiveValue::Set(Some(best_discount.code));
                 customer_baskets::Entity::update(basket_am)
                     .exec(&txn)
-                    .await?;
+                    .await.map_db_err()?;
             }
         }
     }
 
-    txn.commit().await?;
+    txn.commit().await.map_db_err()?;
 
     // Return updated basket back to client
     let updated_basket = get_or_create_basket().await?;
@@ -2311,7 +2380,7 @@ pub async fn update_basket_country(country_code: String) -> Result<CustomerBaske
     let basket_entity = customer_baskets::Entity::find()
         .filter(customer_baskets::Column::Id.eq(&basket_id))
         .one(db)
-        .await?;
+        .await.map_db_err()?;
 
     if let Some(basket_model) = basket_entity {
         // Update the country_code
@@ -2327,7 +2396,7 @@ pub async fn update_basket_country(country_code: String) -> Result<CustomerBaske
         // Save the updated basket
         customer_baskets::Entity::update(basket_active)
             .exec(db)
-            .await?;
+            .await.map_db_err()?;
     }
     // Return the updated basket
     get_or_create_basket().await
@@ -2354,7 +2423,7 @@ pub async fn update_basket_shipping_option(
     let basket_entity = customer_baskets::Entity::find()
         .filter(customer_baskets::Column::Id.eq(&basket_id))
         .one(db)
-        .await?;
+        .await.map_db_err()?;
 
     if let Some(basket_model) = basket_entity {
         // Update the shipping_option
@@ -2364,7 +2433,7 @@ pub async fn update_basket_shipping_option(
         // Save the updated basket
         customer_baskets::Entity::update(basket_active)
             .exec(db)
-            .await?;
+            .await.map_db_err()?;
     }
 
     // Return the updated basket
@@ -2374,7 +2443,7 @@ pub async fn update_basket_shipping_option(
 #[server]
 pub async fn update_basket_discount(
     discount_code: String,
-) -> Result<BasketUpdateResult, ServerFnError<NoCustomError>> {
+) -> Result<BasketUpdateResult, ServerFnError> {
     use sea_orm::{ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
     let db = get_db().await;
 
@@ -2402,15 +2471,15 @@ pub async fn update_basket_discount(
     );
 
     let basket_entity = basket_entity.map_err(|e| {
-        ServerFnError::<NoCustomError>::ServerError(format!("Database error: {}", e))
+        ServerFnError::new(format!("Database error: {}", e))
     })?;
 
     let basket_items = basket_items_result.map_err(|e| {
-        ServerFnError::<NoCustomError>::ServerError(format!("Database error: {}", e))
+        ServerFnError::new(format!("Database error: {}", e))
     })?;
 
     let variants = variants_result.map_err(|e| {
-        ServerFnError::<NoCustomError>::ServerError(format!("Database error: {}", e))
+        ServerFnError::new(format!("Database error: {}", e))
     })?;
 
     if let Some(basket_model) = basket_entity {
@@ -2455,7 +2524,7 @@ pub async fn update_basket_discount(
             .exec(db)
             .await
             .map_err(|e| {
-                ServerFnError::<NoCustomError>::ServerError(format!("Database error: {}", e))
+                ServerFnError::new(format!("Database error: {}", e))
             })?;
     }
 
@@ -2512,11 +2581,11 @@ pub async fn set_basket_item_quantity(
             .all(db),
     );
 
-    let products_with_variants = products_with_variants_res?;
-    let variant_relations = variant_relations_res?;
+    let products_with_variants = products_with_variants_res.map_db_err()?;
+    let variant_relations = variant_relations_res.map_db_err()?;
     let stock_quantities = stock_quantities_res?;
-    let auto_apply_discounts = auto_apply_discounts_res?;
-    let current_basket_items = current_basket_items_res?;
+    let auto_apply_discounts = auto_apply_discounts_res.map_db_err()?;
+    let current_basket_items = current_basket_items_res.map_db_err()?;
 
     // Build stock map
     let stock_map: std::collections::HashMap<String, StockQuantityResult> = stock_quantities
@@ -2608,7 +2677,7 @@ pub async fn set_basket_item_quantity(
     // Final allowed by stock
     let allowed_total = desired_total.min(max_possible);
 
-    let txn = db.begin().await?;
+    let txn = db.begin().await.map_db_err()?;
 
     let status;
     if allowed_total <= 0 {
@@ -2616,7 +2685,7 @@ pub async fn set_basket_item_quantity(
         if let Some(existing_item) = existing_item_opt {
             basket_items::Entity::delete_by_id(existing_item.id.clone())
                 .exec(&txn)
-                .await?;
+                .await.map_db_err()?;
         }
         status = "Removed".to_string();
     } else {
@@ -2624,7 +2693,7 @@ pub async fn set_basket_item_quantity(
             if existing_item.quantity != allowed_total {
                 let mut am: basket_items::ActiveModel = existing_item.into();
                 am.quantity = ActiveValue::Set(allowed_total);
-                basket_items::Entity::update(am).exec(&txn).await?;
+                basket_items::Entity::update(am).exec(&txn).await.map_db_err()?;
                 status = if allowed_total < desired_total {
                     "Reduced".to_string()
                 } else {
@@ -2642,7 +2711,7 @@ pub async fn set_basket_item_quantity(
                 variant_id: ActiveValue::Set(variant_id.clone()),
                 quantity: ActiveValue::Set(allowed_total),
             };
-            basket_items::Entity::insert(new_bi).exec(&txn).await?;
+            basket_items::Entity::insert(new_bi).exec(&txn).await.map_db_err()?;
             status = if allowed_total < desired_total {
                 "Reduced".to_string()
             } else {
@@ -2654,7 +2723,7 @@ pub async fn set_basket_item_quantity(
     // Check for auto-apply discounts after basket modification
     let updated_basket_model = customer_baskets::Entity::find_by_id(&basket_id)
         .one(&txn)
-        .await?
+        .await.map_db_err()?
         .expect("Basket should exist");
 
     // Only check auto-apply discounts if we have a country code
@@ -2664,7 +2733,7 @@ pub async fn set_basket_item_quantity(
             let updated_basket_items = basket_items::Entity::find()
                 .filter(basket_items::Column::BasketId.eq(&basket_id))
                 .all(&txn)
-                .await?;
+                .await.map_db_err()?;;
 
             // Convert products_with_variants to flat variant list
             let variants: Vec<product_variants::Model> = products_with_variants
@@ -2706,12 +2775,12 @@ pub async fn set_basket_item_quantity(
                 basket_am.discount_code = ActiveValue::Set(Some(best_discount.code));
                 customer_baskets::Entity::update(basket_am)
                     .exec(&txn)
-                    .await?;
+                    .await.map_db_err()?;
             }
         }
     }
 
-    txn.commit().await?;
+    txn.commit().await.map_db_err()?;
 
     // Return updated basket
     let updated_basket = get_or_create_basket().await?;
@@ -6316,7 +6385,7 @@ pub async fn verify_magic_link(access_token: String) -> Result<AuthResponse, Ser
     #[cfg(feature = "server")]
     {
         use axum::http::HeaderValue;
-        use dioxus::prelude::server_context;
+        use dioxus::fullstack::FullstackContext;
 
         let cookie_value = format!(
             "session_token={}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000",
@@ -6324,14 +6393,12 @@ pub async fn verify_magic_link(access_token: String) -> Result<AuthResponse, Ser
         );
 
         // Get the server context and set the cookie
-        let server_ctx = server_context();
+        let server_ctx = FullstackContext::current()
+            .expect("Server context should be available");
         let header_value = HeaderValue::from_str(&cookie_value)
             .map_err(|e| ServerFnError::new(format!("Invalid cookie value: {}", e)))?;
 
-        server_ctx
-            .response_parts_mut()
-            .headers
-            .insert(axum::http::header::SET_COOKIE, header_value);
+        server_ctx.add_response_header(axum::http::header::SET_COOKIE, header_value);
     }
 
     Ok(AuthResponse {
@@ -6359,12 +6426,13 @@ pub async fn get_current_manager() -> Result<Option<Manager>, ServerFnError> {
 
 #[cfg(feature = "server")]
 async fn extract_session_token_from_request() -> Result<Option<String>, ServerFnError> {
-    use dioxus::prelude::server_context;
-
-    let server_ctx = server_context();
+    use dioxus::fullstack::FullstackContext;
+    
+    let server_ctx = FullstackContext::current()
+        .expect("Server context should be available");
 
     // Store the request parts to avoid borrowing from temporary values
-    let request_parts = server_ctx.request_parts();
+    let request_parts = server_ctx.parts_mut();
 
     // Get the Cookie header from the request
     let cookie_header = request_parts
@@ -6467,19 +6535,17 @@ pub async fn logout_manager() -> Result<AuthResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
         use axum::http::HeaderValue;
-        use dioxus::prelude::server_context;
+        use dioxus::fullstack::FullstackContext;
 
         let cookie_value = "session_token=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
 
         // Get the server context and set the expired cookie
-        let server_ctx = server_context();
+        let server_ctx = FullstackContext::current()
+            .expect("Server context should be available");
         let header_value = HeaderValue::from_str(cookie_value)
             .map_err(|e| ServerFnError::new(format!("Invalid cookie value: {}", e)))?;
 
-        server_ctx
-            .response_parts_mut()
-            .headers
-            .insert(axum::http::header::SET_COOKIE, header_value);
+        server_ctx.add_response_header(axum::http::header::SET_COOKIE, header_value);
     }
 
     Ok(AuthResponse {
@@ -6542,7 +6608,7 @@ pub async fn cleanup_expired_sessions() -> Result<u64, ServerFnError> {
         .filter(manager_sessions::Column::ExpiresAt.lt(now))
         .exec(db)
         .await
-        .map_err(|e| ServerFnError::new(format!("Failed to cleanup sessions: {}", e)))?;
+        .map_err(|e| ServerFnError::new(format!("Failed to delete expired sessions: {}", e)))?;
 
     Ok(result.rows_affected)
 }

@@ -543,6 +543,14 @@ pub enum ConversionError {
     MismatchedLength { models: usize, contexts: usize },
 }
 
+// Implement From trait to allow using ? operator with ConversionError in server functions
+#[cfg(feature = "server")]
+impl From<ConversionError> for dioxus::prelude::ServerFnError {
+    fn from(err: ConversionError) -> Self {
+        dioxus::prelude::ServerFnError::new(format!("Conversion error: {}", err))
+    }
+}
+
 // Updated conversion implementations
 #[cfg(feature = "server")]
 impl From<customer_baskets::Model> for CustomerBasket {
