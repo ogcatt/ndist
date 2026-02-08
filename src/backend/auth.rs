@@ -284,26 +284,45 @@ pub async fn auth_middleware(
 
     let mut user_opt: Option<User> = None;
 
+    // Check if this is an admin route - if so, read from DB directly (no cache)
+    // This ensures admin status changes are reflected immediately
+    let is_admin_route = path.starts_with("/admin") || path.starts_with("/api/admin");
+
     if let Some(session_token) = cookies.get("session_token") {
-        // Validate the session token using cached validation
-        match state.auth_service.validate_session_with_negative_cache(
-            session_token,
-            &state.session_cache,
-            &state.negative_cache
-        ).await {
-            Ok(user) => {
-                user_opt = Some(user);
+        if is_admin_route {
+            // For admin routes, always validate from database to get current admin status
+            match state.auth_service.validate_session(session_token).await {
+                Ok(user) => {
+                    user_opt = Some(user);
+                }
+                Err(e) => {
+                    tracing::info!("Session validation failed for admin route: {}", e);
+                    // Invalidate from both caches
+                    state.session_cache.invalidate(session_token).await;
+                    state.negative_cache.insert(session_token.to_string(), ()).await;
+                }
             }
-            Err(e) => {
-                tracing::info!("Session validation failed: {}", e);
-                // Invalid session, ensure it's in negative cache
-                state.negative_cache.insert(session_token.to_string(), ()).await;
+        } else {
+            // For non-admin routes, use cached validation
+            match state.auth_service.validate_session_with_negative_cache(
+                session_token,
+                &state.session_cache,
+                &state.negative_cache
+            ).await {
+                Ok(user) => {
+                    user_opt = Some(user);
+                }
+                Err(e) => {
+                    tracing::info!("Session validation failed: {}", e);
+                    // Invalid session, ensure it's in negative cache
+                    state.negative_cache.insert(session_token.to_string(), ()).await;
+                }
             }
         }
     }
 
     // Check if this is an admin route that requires authentication
-    if path.starts_with("/admin") || path.starts_with("/api/admin") {
+    if is_admin_route {
         match user_opt {
             Some(user) => {
                 // Check if user has admin privileges for /admin routes
