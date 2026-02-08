@@ -34,7 +34,7 @@ use views::{
     AdminCreateProduct, AdminCreateStockItem, AdminCustomers, AdminDiscounts, AdminEditBlogPost,
     AdminEditDiscount, AdminEditProduct, AdminEditStockItem, AdminInventory, AdminOrders,
     AdminProducts, AdminSettings, BlogPostPage, BlogPosts, Cart, Checkout, CheckoutPayment,
-    Collection, Collections, Contact, Dashboard as AdminDashboard, Faq, Home, NotFound,
+    Collection, Collections, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound,
     OrderStatus, PeptideCalculator, Policies, ProductPage, ShippingPolicy, SignIn as AdminSignIn,
     VerifyMagicLink,
 };
@@ -51,6 +51,8 @@ enum Route {
     #[layout(HeaderFooter)]
         #[route("/")]
         Home {},
+        #[route("/dashboard")]
+        UserDashboard {},
         #[nest("/collections")]
             #[route("")]
             Collections {},

@@ -56,3 +56,6 @@ pub use checkout_payment::*;
 
 pub mod order_status;
 pub use order_status::*;
+
+mod dashboard;
+pub use dashboard::*;

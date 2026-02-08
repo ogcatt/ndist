@@ -1,8 +1,15 @@
 use dioxus::prelude::*;
-use crate::components::account_popup::AccountPopupContent;
+use crate::components::account_popup::{AccountPopupContent, SessionState};
 
 #[component]
 pub fn SignIn() -> Element {
+    let session_state = use_signal(|| SessionState {
+        authenticated: false,
+        email: String::new(),
+        name: String::new(),
+        admin: false,
+    });
+
     rsx! {
         div { class: "min-h-screen flex items-center justify-center bg-white",
             div { class: "max-w-md w-full space-y-8 p-8 bg-white rounded-lg border-gray-200 border",
@@ -18,7 +25,8 @@ pub fn SignIn() -> Element {
             // Render the AccountPopup content directly in this page
             AccountPopupContent {
                 email: use_signal(|| String::new()),
-                on_close: move || {
+                session_state: session_state,
+                on_close: move |_| {
                     // In admin context, just reload to go back to home
                     web_sys::window()
                         .unwrap()

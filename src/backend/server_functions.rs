@@ -6689,6 +6689,34 @@ pub async fn logout_manager() -> Result<AuthResponse, ServerFnError> {
     logout_user().await
 }
 
+/// Get session info - returns whether user is logged in and their basic info
+#[server]
+pub async fn get_session_info() -> Result<SessionInfo, ServerFnError> {
+    match get_current_user().await {
+        Ok(Some(user)) => Ok(SessionInfo {
+            authenticated: true,
+            email: user.email,
+            name: user.name,
+            admin: user.admin,
+        }),
+        _ => Ok(SessionInfo {
+            authenticated: false,
+            email: String::new(),
+            name: String::new(),
+            admin: false,
+        }),
+    }
+}
+
+/// Session info response structure
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SessionInfo {
+    pub authenticated: bool,
+    pub email: String,
+    pub name: String,
+    pub admin: bool,
+}
+
 // Helper function to get user by ID (for internal use)
 #[server]
 pub async fn admin_get_user_by_id(user_id: String) -> Result<Option<User>, ServerFnError> {

@@ -3,7 +3,6 @@ use dioxus::prelude::*;
 use dioxus_i18n::t;
 
 use crate::backend::server_functions::*;
-use crate::components::use_account_popup;
 use crate::Route;
 
 #[component]

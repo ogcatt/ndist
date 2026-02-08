@@ -1,14 +1,50 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 use crate::Route;
-use crate::backend::server_functions::{send_otp, verify_otp, VerifyOtpResponse};
+use crate::backend::server_functions::{send_otp, verify_otp, VerifyOtpResponse, get_session_info};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use gloo_timers::future::TimeoutFuture;
 
-// Create a global signal for account popup state
+// Session info for UI state
+#[derive(Clone, Debug, Default)]
+pub struct SessionState {
+    pub authenticated: bool,
+    pub email: String,
+    pub name: String,
+    pub admin: bool,
+}
+
+// Global storage for session state (use Rc<RefCell<...>> for interior mutability)
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+// Using atomic globals to avoid context issues during hydration
+static SESSION_STORAGE: Lazy<Mutex<Option<SessionState>>> = Lazy::new(|| Mutex::new(None));
+static POPUP_OPEN: AtomicBool = AtomicBool::new(false);
+
+// Hook to get session state - safe for SSR and hydration
+fn use_global_session_state() -> SessionState {
+    SESSION_STORAGE.lock().unwrap().clone().unwrap_or_default()
+}
+
+// Hook to set session state
+fn set_global_session_state(state: SessionState) {
+    *SESSION_STORAGE.lock().unwrap() = Some(state);
+}
+
+// Create a global signal for account popup state (uses atomics for safety)
+pub fn use_account_popup_open() -> bool {
+    POPUP_OPEN.load(Ordering::Relaxed)
+}
+
+pub fn set_account_popup_open(open: bool) {
+    POPUP_OPEN.store(open, Ordering::Relaxed);
+}
+
 pub fn use_account_popup() -> Option<Signal<bool>> {
     Some(use_context::<Signal<bool>>())
 }
@@ -17,15 +53,58 @@ pub fn use_account_popup() -> Option<Signal<bool>> {
 pub fn AccountPopupProvider(children: Element) -> Element {
     let mut account_popup_open = use_signal(|| false);
     let mut email = use_signal(|| String::new());
+    let mut session_state = use_signal(|| SessionState {
+        authenticated: false,
+        email: String::new(),
+        name: String::new(),
+        admin: false,
+    });
 
-    // Provide the signal to children
+    // Check session on mount
+    use_effect(move || {
+        spawn(async move {
+            match get_session_info().await {
+                Ok(session) => {
+                    let state = SessionState {
+                        authenticated: session.authenticated,
+                        email: session.email,
+                        name: session.name,
+                        admin: session.admin,
+                    };
+                    session_state.set(state.clone());
+                    set_global_session_state(state);
+                }
+                Err(_) => {
+                    let state = SessionState {
+                        authenticated: false,
+                        email: String::new(),
+                        name: String::new(),
+                        admin: false,
+                    };
+                    session_state.set(state.clone());
+                    set_global_session_state(state);
+                }
+            }
+        });
+    });
+
+    // Sync popup state with global
+    let popup_open_global = use_global_session_state;
+    use_effect(move || {
+        let open = *account_popup_open.read();
+        set_account_popup_open(open);
+    });
+
+    // Provide the signal to children (for components that still use context)
     use_context_provider(|| account_popup_open);
+    use_context_provider(|| session_state);
 
     rsx! {
         {children}
         if *account_popup_open.read() {
             AccountPopupContent {
                 email: email,
+                session_state: session_state,
                 on_close: move || account_popup_open.set(false),
             }
         }
@@ -33,7 +112,11 @@ pub fn AccountPopupProvider(children: Element) -> Element {
 }
 
 #[component]
-pub fn AccountPopupContent(email: Signal<String>, on_close: EventHandler<()>) -> Element {
+pub fn AccountPopupContent(
+    email: Signal<String>,
+    session_state: Signal<SessionState>,
+    on_close: EventHandler<()>,
+) -> Element {
     let mut step = use_signal(|| 0i32); // 0: email input, 1: OTP input
     let mut email_val = use_signal(|| email.read().clone());
     let mut otp_code = use_signal(|| vec![String::new(); 6]);
@@ -145,20 +228,20 @@ pub fn AccountPopupContent(email: Signal<String>, on_close: EventHandler<()>) ->
                         // Show the error message from backend
                         message.set(msg);
                     } else if let Some(_token) = res.session_token {
-                        // Success - close popup and reload to apply session
+                        // Success - close popup and redirect to dashboard
                         message.set("Sign in successful!".to_string());
                         web_sys::window()
                             .unwrap()
                             .location()
-                            .reload()
+                            .set_href("/dashboard")
                             .unwrap();
                     } else if res.is_new_user {
-                        // New user created - should not happen anymore but handle it
+                        // New user created - redirect to dashboard
                         message.set("Account created successfully!".to_string());
                         web_sys::window()
                             .unwrap()
                             .location()
-                            .reload()
+                            .set_href("/dashboard")
                             .unwrap();
                     }
                 }
@@ -345,18 +428,48 @@ pub fn AccountPopupContent(email: Signal<String>, on_close: EventHandler<()>) ->
     }
 }
 
+// Get session state from global storage - safe for SSR and hydration
+fn use_session_state() -> SessionState {
+    use_global_session_state()
+}
+
 #[component]
 pub fn AccountButton() -> Element {
+    let session_state = use_session_state();
+    let is_authenticated = session_state.authenticated;
+
     let Some(mut account_popup_open) = use_account_popup() else {
-        return rsx! { button { class: "h-full", title: "Account", div { class: "flex justify-center", img { class: "fadey", src: asset!("/assets/icons/person-circle-outline.svg"), style: "height:27px;" } } } };
+        return rsx! {
+            button {
+                class: "h-full",
+                title: "Account",
+                div {
+                    class: "flex justify-center",
+                    img {
+                        class: "fadey",
+                        src: asset!("/assets/icons/person-circle-outline.svg"),
+                        style: "height:27px;"
+                    }
+                }
+            }
+        };
     };
 
     rsx! {
         button {
             class: "h-full",
-            title: "Account",
+            title: if is_authenticated { "Dashboard" } else { "Account" },
             onclick: move |_| {
-                account_popup_open.set(true);
+                if is_authenticated {
+                    // Navigate to dashboard when logged in
+                    let _ = web_sys::window()
+                        .unwrap()
+                        .location()
+                        .set_href("/dashboard");
+                } else {
+                    // Open the account popup when not logged in
+                    account_popup_open.set(true);
+                }
             },
             div {
                 class: "flex justify-center",
@@ -372,14 +485,39 @@ pub fn AccountButton() -> Element {
 
 #[component]
 pub fn AccountMobileButton() -> Element {
+    let session_state = use_session_state();
+    let is_authenticated = session_state.authenticated;
+
     let Some(mut account_popup_open) = use_account_popup() else {
-        return rsx! { button { class: "w-full px-4 py-3 flex items-center text-gray-900", img { src: asset!("/assets/icons/person-circle-outline.svg") }, span { "Sign in" } } };
+        return rsx! {
+            button {
+                class: "w-full px-4 py-3 flex items-center text-gray-900",
+                img {
+                    class: "blende mr-3",
+                    src: asset!("/assets/icons/person-circle-outline.svg"),
+                    style: "height:20px;"
+                },
+                span {
+                    class: "text-sm font-semibold flex-1 text-left",
+                    "Sign in or create account"
+                }
+            }
+        };
     };
 
     rsx! {
         button {
             onclick: move |_| {
-                account_popup_open.set(true);
+                if is_authenticated {
+                    // Navigate to dashboard when logged in
+                    let _ = web_sys::window()
+                        .unwrap()
+                        .location()
+                        .set_href("/dashboard");
+                } else {
+                    // Open the account popup when not logged in
+                    account_popup_open.set(true);
+                }
             },
             class: "w-full px-4 py-3 flex items-center text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out",
             img {
@@ -389,7 +527,11 @@ pub fn AccountMobileButton() -> Element {
             },
             span {
                 class: "text-sm font-semibold flex-1 text-left",
-                "Sign in or create account"
+                if is_authenticated {
+                    "Dashboard"
+                } else {
+                    "Sign in or create account"
+                }
             }
         }
     }
