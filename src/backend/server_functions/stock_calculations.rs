@@ -654,6 +654,7 @@ fn calculate_child_stock_allocations(
     Ok(allocations)
 }
 
+#[cfg(feature = "server")]
 pub fn calculate_variant_stock_quantities(
     mut products: Vec<Product>,
     relations: Vec<product_variant_stock_item_relations::Model>,
@@ -688,6 +689,7 @@ pub fn calculate_variant_stock_quantities(
     products
 }
 
+#[cfg(feature = "server")]
 pub fn calculate_variant_available_stock(
     variant_id: &str,
     variant_relations: &HashMap<String, Vec<&product_variant_stock_item_relations::Model>>,

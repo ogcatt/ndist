@@ -37,8 +37,11 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use super::super::front_entities::*;
+
+#[cfg(feature = "server")]
 use super::discounts::check_discount;
-use super::stock_calculations::{StockCalculationError, super::front_entities::StockQuantityResult};
+#[cfg(feature = "server")]
+use super::stock_calculations::StockCalculationError;
 
 #[cfg(feature = "server")]
 use super::stock_calculations::get_stock_quantities_for_stock_items;
@@ -120,13 +123,6 @@ impl std::error::Error for CookieError {}
 #[cfg(feature = "server")]
 impl From<CookieError> for ServerFnError {
     fn from(err: CookieError) -> Self {
-        ServerFnError::new(err.to_string())
-    }
-}
-
-#[cfg(feature = "server")]
-impl From<StockCalculationError> for ServerFnError {
-    fn from(err: StockCalculationError) -> Self {
         ServerFnError::new(err.to_string())
     }
 }

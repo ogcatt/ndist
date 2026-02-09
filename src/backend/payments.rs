@@ -46,7 +46,7 @@ use super::shipping_calculations::{
 };
 #[cfg(feature = "server")]
 use crate::backend::server_functions::{
-    calculate_stock_quantities, calculate_total_cart_weight, calculate_variant_available_stock,
+    calculate_variant_stock_quantities, calculate_total_cart_weight, calculate_variant_available_stock,
     check_discount, get_or_create_basket, get_stock_quantities_for_stock_items,
 };
 #[cfg(feature = "server")]

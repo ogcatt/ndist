@@ -33,6 +33,8 @@ use sea_orm::sea_query::OnConflict;
 
 use super::super::front_entities::*;
 use super::auth::{check_admin_permission, get_current_user};
+
+#[cfg(feature = "server")]
 use super::stock_calculations::get_stock_quantities_for_stock_items;
 
 #[cfg(feature = "server")]
