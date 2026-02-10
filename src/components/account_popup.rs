@@ -435,10 +435,12 @@ fn use_session_state() -> SessionState {
 
 #[component]
 pub fn AccountButton() -> Element {
-    let session_state = use_session_state();
-    let is_authenticated = session_state.authenticated;
+    let mut session_resource = use_resource(move || async move {
+        get_session_info().await
+    });
 
     let Some(mut account_popup_open) = use_account_popup() else {
+        // Return placeholder button when no context available
         return rsx! {
             button {
                 class: "h-full",
@@ -455,28 +457,46 @@ pub fn AccountButton() -> Element {
         };
     };
 
-    rsx! {
-        button {
-            class: "h-full",
-            title: if is_authenticated { "Dashboard" } else { "Account" },
-            onclick: move |_| {
-                if is_authenticated {
-                    // Navigate to dashboard when logged in
-                    let _ = web_sys::window()
-                        .unwrap()
-                        .location()
-                        .set_href("/dashboard");
-                } else {
-                    // Open the account popup when not logged in
-                    account_popup_open.set(true);
+    let session_state = session_resource.read();
+    let is_authenticated = session_state
+        .as_ref()
+        .map(|s| s.as_ref().map(|session| session.authenticated).unwrap_or(false))
+        .unwrap_or(false);
+
+    if is_authenticated {
+        rsx! {
+            Link {
+                to: Route::UserDashboard {},
+                class: "h-full",
+                title: "Dashboard",
+                button {
+                    class: "h-full",
+                    div {
+                        class: "flex justify-center",
+                        img {
+                            class: "fadey",
+                            src: asset!("/assets/icons/person-circle-outline.svg"),
+                            style: "height:27px;"
+                        }
+                    }
                 }
-            },
-            div {
-                class: "flex justify-center",
-                img {
-                    class: "fadey",
-                    src: asset!("/assets/icons/person-circle-outline.svg"),
-                    style: "height:27px;"
+            }
+        }
+    } else {
+        rsx! {
+            button {
+                class: "h-full",
+                title: "Account",
+                onclick: move |_| {
+                    account_popup_open.set(true);
+                },
+                div {
+                    class: "flex justify-center",
+                    img {
+                        class: "fadey",
+                        src: asset!("/assets/icons/person-circle-outline.svg"),
+                        style: "height:27px;"
+                    }
                 }
             }
         }
@@ -485,12 +505,15 @@ pub fn AccountButton() -> Element {
 
 #[component]
 pub fn AccountMobileButton() -> Element {
-    let session_state = use_session_state();
-    let is_authenticated = session_state.authenticated;
+    let mut session_resource = use_resource(move || async move {
+        get_session_info().await
+    });
 
     let Some(mut account_popup_open) = use_account_popup() else {
+        // Return placeholder link when no context available
         return rsx! {
-            button {
+            Link {
+                to: Route::UserDashboard {},
                 class: "w-full px-4 py-3 flex items-center text-gray-900",
                 img {
                     class: "blende mr-3",
@@ -499,37 +522,48 @@ pub fn AccountMobileButton() -> Element {
                 },
                 span {
                     class: "text-sm font-semibold flex-1 text-left",
-                    "Sign in or create account"
+                    "Dashboard"
                 }
             }
         };
     };
 
-    rsx! {
-        button {
-            onclick: move |_| {
-                if is_authenticated {
-                    // Navigate to dashboard when logged in
-                    let _ = web_sys::window()
-                        .unwrap()
-                        .location()
-                        .set_href("/dashboard");
-                } else {
-                    // Open the account popup when not logged in
-                    account_popup_open.set(true);
-                }
-            },
-            class: "w-full px-4 py-3 flex items-center text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out",
-            img {
-                class: "blende mr-3",
-                src: asset!("/assets/icons/person-circle-outline.svg"),
-                style: "height:20px;"
-            },
-            span {
-                class: "text-sm font-semibold flex-1 text-left",
-                if is_authenticated {
+    let session_state = session_resource.read();
+    let is_authenticated = session_state
+        .as_ref()
+        .map(|s| s.as_ref().map(|session| session.authenticated).unwrap_or(false))
+        .unwrap_or(false);
+
+    if is_authenticated {
+        rsx! {
+            Link {
+                to: Route::UserDashboard {},
+                class: "w-full px-4 py-3 flex items-center text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out",
+                img {
+                    class: "blende mr-3",
+                    src: asset!("/assets/icons/person-circle-outline.svg"),
+                    style: "height:20px;"
+                },
+                span {
+                    class: "text-sm font-semibold flex-1 text-left",
                     "Dashboard"
-                } else {
+                }
+            }
+        }
+    } else {
+        rsx! {
+            button {
+                onclick: move |_| {
+                    account_popup_open.set(true);
+                },
+                class: "w-full px-4 py-3 flex items-center text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out",
+                img {
+                    class: "blende mr-3",
+                    src: asset!("/assets/icons/person-circle-outline.svg"),
+                    style: "height:20px;"
+                },
+                span {
+                    class: "text-sm font-semibold flex-1 text-left",
                     "Sign in or create account"
                 }
             }

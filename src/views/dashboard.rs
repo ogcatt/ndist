@@ -54,15 +54,20 @@ pub fn UserDashboard() -> Element {
                                         dd { class: "mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2",
                                             "{session.email}" }
                                     }
-                                    div { class: "py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6",
-                                        dt { class: "text-sm font-medium text-gray-500",
-                                            "Name" }
-                                        dd { class: "mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2",
-                                            if session.name.is_empty() {
-                                                "Not set"
-                                            } else {
+                                    if !session.name.is_empty() && session.name != session.email {
+                                        div { class: "py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6",
+
+                                            dt { class: "text-sm font-medium text-gray-500",
+                                                "Name"
+                                            }
+                                            dd { class: "mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2",
                                                 "{session.name}"
-                                            } }
+                                            }
+
+                                        }
+                                    } else {
+                                        // Hide name section entirely if empty or same as email
+                                        ""
                                     }
                                     div { class: "py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6",
                                         dt { class: "text-sm font-medium text-gray-500",

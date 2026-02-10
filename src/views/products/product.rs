@@ -44,88 +44,85 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
     let mut adding = use_signal(|| false);
     let max_per_item = 12i32;
 
-    let mut update_product_data = move |products: &Vec<Product>, current_handle: &str| {
-        all_products.set(products.clone());
+    let mut update_product_data = move |product: Product| {
+        current_product.set(Some(product.clone()));
+        product_not_found.set(false);
+        current_variant.set(0);
 
-        if let Some(product) = products.iter().find(|p| p.handle == current_handle) {
-            current_product.set(Some(product.clone()));
-            product_not_found.set(false);
-            current_variant.set(0);
-
-            /* old
-            if let Some(ref variants) = product.variants {
-                if let Some(variant) = variants.first() {
-                    if let Some(ref thumbnail) = variant.thumbnail_url {
-                        preview_url.set(thumbnail.clone());
-                    }
+        // Update the preview_url based on what's available
+        if let Some(ref variants) = product.variants {
+            if let Some(variant) = variants.first() {
+                if let Some(ref thumbnail) = variant.thumbnail_url {
+                    preview_url.set(thumbnail.clone());
+                } else if product.smiles.is_some() && product.enable_render_if_smiles {
+                    preview_url.set("smiles".to_string());
+                } else {
+                    preview_url.set(String::new());
                 }
             }
-            */
-
-            // Update the preview_url based on what's available
-            if let Some(ref variants) = product.variants {
-                if let Some(variant) = variants.first() {
-                    if let Some(ref thumbnail) = variant.thumbnail_url {
-                        preview_url.set(thumbnail.clone());
-                    } else if product.smiles.is_some() && product.enable_render_if_smiles {
-                        preview_url.set("smiles".to_string());
-                    } else {
-                        preview_url.set(String::new());
-                    }
-                }
-            } else {
-                preview_url.set(String::new());
-            }
-
         } else {
+            preview_url.set(String::new());
+        }
+    };
+
+    // 1. Try to get cached public products for related products section
+    let cached_products: Option<Vec<Product>> = use_existing_cached_server("get_products");
+
+    // 2. Load related products from cache if available
+    use_effect(move || {
+        if let Some(ref products) = cached_products {
+            all_products.set(products.clone());
+
+            let current_handle = handle();
+            let rel_products: Vec<Product> = products
+                .iter()
+                .filter(|p| p.handle != current_handle)
+                .take(8)
+                .cloned()
+                .collect();
+            relevant_products.set(rel_products);
+        }
+    });
+
+    // 3. Fetch the specific product by handle (works for unlisted products too)
+    let product_resource = use_resource({
+        move || {
+            let handle_value = handle();
+            async move {
+                server_functions::get_product_by_handle(handle_value).await
+            }
+        }
+    });
+
+    // 4. Update current product when the resource loads
+    use_effect(move || {
+        if let Some(Ok(Some(product))) = product_resource.read().as_ref() {
+            update_product_data(product.clone());
+        } else if let Some(Ok(None)) = product_resource.read().as_ref() {
+            // Product not found
             current_product.set(None);
             product_not_found.set(true);
         }
-
-        let rel_products: Vec<Product> = products
-            .iter()
-            .filter(|p| p.handle != current_handle)
-            .take(8)
-            .cloned()
-            .collect();
-        relevant_products.set(rel_products);
-    };
-
-    // 1. Check for existing cached data
-    let cached_products: Option<Vec<Product>> = use_existing_cached_server("get_products");
-
-    // 2. Set initial data from cache if available.
-    use_effect(move || {
-        let current_handle = handle();
-        tracing::info!("Setting initial cache for product {}", current_handle);
-        if let Some(ref products) = cached_products {
-            update_product_data(products, &current_handle);
-        }
     });
 
-    // 3. Make fresh request for updated data.
-    let fresh_products_resource = use_resource({
-        let handlee = handle();
-        move || {
-            let handle_for_future = handle();
-            async move {
-                let _handle_dep = &handle_for_future;
-                server_functions::get_products().await
-            }
-        }
+    // 5. Optionally fetch all public products for related products (in background)
+    let public_products_resource = use_resource(move || async move {
+        server_functions::get_products().await
     });
 
-    // 4. Update with fresh data when available.
+    // 6. Update related products when public products load
     use_effect(move || {
-        let current_handle = handle();
+        if let Some(Ok(products)) = public_products_resource.read().as_ref() {
+            all_products.set(products.clone());
 
-        tracing::info!(
-            "Updating product {} with fresh data",
-            current_handle.clone()
-        );
-
-        if let Some(Ok(fresh_products)) = fresh_products_resource.read().as_ref() {
-            update_product_data(fresh_products, &current_handle);
+            let current_handle = handle();
+            let rel_products: Vec<Product> = products
+                .iter()
+                .filter(|p| p.handle != current_handle)
+                .take(8)
+                .cloned()
+                .collect();
+            relevant_products.set(rel_products);
         }
     });
 
@@ -688,7 +685,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                         let error_line = error_line.clone();
                                                         let adding = adding.clone();
                                                         let quantity = quantity.clone();
-                                                        let fresh_products_resource = fresh_products_resource.clone();
+                                                        let product_resource = product_resource.clone();
                                                         let current_product_sig = current_product.clone();
                                                         let current_variant_idx = *current_variant.read();
                                                         move |_| {
@@ -705,7 +702,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                             let mut error_line = error_line.clone();
                                                                             let mut adding = adding.clone();
                                                                             let mut quantity = quantity.clone();
-                                                                            let mut fresh_products_resource = fresh_products_resource.clone();
+                                                                            let mut product_resource = product_resource.clone();
                                                                             async move {
                                                                                 adding.set(true);
                                                                                 add_btn_text.set(t!("adding-dot-dot-dot"));
@@ -729,19 +726,19 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                                                 add_btn_text.set(t!("reduced"));
                                                                                                 add_btn_added.set(false);
                                                                                                 error_line.set(t!("reduced-info"));
-                                                                                                fresh_products_resource.restart();
+                                                                                                product_resource.restart();
                                                                                             }
                                                                                             "Removed" => {
                                                                                                 add_btn_text.set(t!("unavailable"));
                                                                                                 add_btn_added.set(false);
                                                                                                 error_line.set(t!("removed-info"));
-                                                                                                fresh_products_resource.restart();
+                                                                                                product_resource.restart();
                                                                                             }
                                                                                             "NotFound" => {
                                                                                                 add_btn_text.set(t!("not-found"));
                                                                                                 add_btn_added.set(false);
                                                                                                 error_line.set(t!("not-found-info"));
-                                                                                                fresh_products_resource.restart();
+                                                                                                product_resource.restart();
                                                                                             }
                                                                                             "Invalid" => {
                                                                                                 add_btn_text.set(t!("invalid"));
@@ -758,7 +755,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                                         add_btn_text.set(t!("failed-to-add"));
                                                                                         add_btn_added.set(false);
                                                                                         error_line.set(t!("could-not-add-error", error: format!("{:?}", e)));
-                                                                                        fresh_products_resource.restart();
+                                                                                        product_resource.restart();
                                                                                     }
                                                                                 }
 

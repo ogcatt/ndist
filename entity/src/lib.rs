@@ -30,6 +30,8 @@ pub mod stock_item_relations;
 pub mod stock_items;
 pub mod variant_images;
 pub mod pre_order;
+//pub mod groups;
+//pub mod group_members;
 
 // Add this custom type for handling string arrays
 pub mod types {

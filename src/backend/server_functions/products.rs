@@ -161,6 +161,67 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
 }
 
 #[server]
+pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, ServerFnError> {
+    let db = get_db().await;
+
+    // Fetch product and variants, allowing unlisted/private products
+    let product_with_variants_result = products::Entity::find()
+        .filter(products::Column::Handle.eq(handle))
+        .find_with_related(product_variants::Entity)
+        .all(db)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    // Check if product exists
+    if product_with_variants_result.is_empty() {
+        return Ok(None);
+    }
+
+    let (product_model, variant_models) = product_with_variants_result
+        .into_iter()
+        .next()
+        .ok_or_else(|| ServerFnError::new("Product not found".to_string()))?;
+
+    // Fetch variant relations and stock quantities
+    let (variant_relations_result, stock_qty_results_result) = tokio::join!(
+        async {
+            product_variant_stock_item_relations::Entity::find()
+                .all(db)
+                .await
+        },
+        get_stock_quantities_for_stock_items(None)
+    );
+
+    let variant_relations = variant_relations_result.map_db_err()?;
+    let stock_qty_results = stock_qty_results_result?;
+
+    // Convert variants
+    let converted_variants = if !variant_models.is_empty() {
+        Some(entity_conversions::convert_product_variants(
+            variant_models,
+        ))
+    } else {
+        None
+    };
+
+    let context = entity_conversions::ProductConversionContext {
+        product_phase: ProductPhase::default(),
+        variants: converted_variants,
+    };
+
+    // Convert product
+    let mut products = entity_conversions::convert_products_batch_with_context(
+        vec![product_model],
+        vec![context],
+    )?;
+
+    // Calculate stock quantities
+    products = calculate_variant_stock_quantities(products, variant_relations, stock_qty_results);
+
+    Ok(products.into_iter().next())
+}
+
+#[server]
 pub async fn admin_get_products(convert_markdown: bool) -> Result<Vec<Product>, ServerFnError> {
     let db = get_db().await;
 

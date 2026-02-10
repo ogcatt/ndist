@@ -28,3 +28,5 @@ pub use super::variant_images::Entity as VariantImages;
 pub use super::stock_backorder_active_reduce::Entity as StockBackorderActiveReduce;
 pub use super::stock_preorder_active_reduce::Entity as StockPreorderActiveReduce;
 pub use super::pre_order::Entity as PreOrder;
+//pub use super::groups::Entity as Groups;
+//pub use super::group_members::Entity as GroupMembers;
