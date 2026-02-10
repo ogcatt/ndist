@@ -3,15 +3,14 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "users")]
+#[sea_orm(table_name = "groups")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub id: String,
     #[sea_orm(column_type = "Text")]
-    pub email: String,
-    #[sea_orm(column_type = "Text")]
     pub name: String,
-    pub admin: bool,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub description: Option<String>,
     #[sea_orm(column_name = "createdAt")]
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
@@ -20,16 +19,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::user_sessions::Entity")]
-    UserSessions,
     #[sea_orm(has_many = "super::group_members::Entity")]
     GroupMembers,
-}
-
-impl Related<super::user_sessions::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::UserSessions.def()
-    }
 }
 
 impl Related<super::group_members::Entity> for Entity {

@@ -6,6 +6,7 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Create groups table
         manager
             .create_table(
                 Table::create()
@@ -19,21 +20,21 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Groups::Name).text().not_null())
                     .col(ColumnDef::new(Groups::Description).text().null())
-                    .col(ColumnDef::new(Groups::CreatedAt).timestamp().not_null())
-                    .col(ColumnDef::new(Groups::UpdatedAt).timestamp().not_null())
-                    .col(ColumnDef::new(Groups::UserId).text().not_null())
-                    .foreign_key(
-                        ForeignKey::create()
-                            .name("fk_groups_user_id")
-                            .from(Groups::Table, Groups::UserId)
-                            .to(Users::Table, Users::Id)
-                            .on_delete(ForeignKeyAction::Cascade)
-                            .on_update(ForeignKeyAction::Cascade),
+                    .col(
+                        ColumnDef::new(Groups::CreatedAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(Groups::UpdatedAt)
+                            .date_time()
+                            .not_null(),
                     )
                     .to_owned(),
             )
             .await?;
 
+        // Create group_members table
         manager
             .create_table(
                 Table::create()
@@ -41,14 +42,22 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(
                         ColumnDef::new(GroupMembers::Id)
-                            .integer()
+                            .text()
                             .not_null()
-                            .auto_increment()
                             .primary_key(),
                     )
                     .col(ColumnDef::new(GroupMembers::GroupId).text().not_null())
                     .col(ColumnDef::new(GroupMembers::UserId).text().not_null())
-                    .col(ColumnDef::new(GroupMembers::CreatedAt).timestamp().not_null())
+                    .col(
+                        ColumnDef::new(GroupMembers::CreatedAt)
+                            .date_time()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(GroupMembers::UpdatedAt)
+                            .date_time()
+                            .not_null(),
+                    )
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_group_members_group_id")
@@ -67,17 +76,36 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        // Create unique index to prevent duplicate group memberships
+        manager
+            .create_index(
+                Index::create()
+                    .if_not_exists()
+                    .name("idx_group_members_unique")
+                    .table(GroupMembers::Table)
+                    .col(GroupMembers::GroupId)
+                    .col(GroupMembers::UserId)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Drop tables in reverse order
         manager
             .drop_table(Table::drop().table(GroupMembers::Table).to_owned())
             .await?;
 
         manager
             .drop_table(Table::drop().table(Groups::Table).to_owned())
-            .await
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -87,9 +115,10 @@ enum Groups {
     Id,
     Name,
     Description,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
     UpdatedAt,
-    UserId,
 }
 
 #[derive(DeriveIden)]
@@ -98,7 +127,10 @@ enum GroupMembers {
     Id,
     GroupId,
     UserId,
+    #[sea_orm(iden = "createdAt")]
     CreatedAt,
+    #[sea_orm(iden = "updatedAt")]
+    UpdatedAt,
 }
 
 #[derive(DeriveIden)]

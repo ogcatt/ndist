@@ -113,7 +113,7 @@ impl MigratorTrait for Migrator {
             Box::new(add_auth_tokens::Migration),
             Box::new(add_mechanism_to_products::Migration),
             Box::new(rename_managers_to_userss::Migration),
-            //Box::new(add_groups::Migration),
+            Box::new(add_groups::Migration),
         ]
     }
 }
