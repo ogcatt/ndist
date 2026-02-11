@@ -297,7 +297,357 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
 
                         // Set meta information
 
-                        // Product Information Section
+                        // Product Image and Thumbnails Section (NOW ON LEFT)
+                        div {
+                            class: "flex-grow md:w-[400px]",
+
+                            // Main Image
+                            div {
+                                class: "relative aspect-square rounded-lg overflow-hidden shadow-lg border-ui-border-base border",
+
+                                {
+                                    let preview = &*preview_url.read();
+                                    if !preview.is_empty() && preview != "smiles" {
+                                        // Add state for zoom
+                                        let mut is_zoomed = use_signal(|| false);
+                                        let mut transform_style = use_signal(|| String::from("transform: scale(1)"));
+
+                                        rsx! {
+                                            div {
+                                                class: if *is_zoomed.read() {
+                                                    "cursor-zoom-out relative w-full h-full overflow-hidden"
+                                                } else {
+                                                    "cursor-zoom-in relative w-full h-full overflow-hidden"
+                                                },
+
+                                                img {
+                                                    id: "zoomable-image",
+                                                    alt: format!("{} {}", product.title, t!("thumbnail")),
+                                                    src: "{preview}",
+                                                    class: if *is_zoomed.read() {
+                                                        "absolute object-contain cursor-zoom-out transition-transform duration-300 ease-out select-none"
+                                                    } else {
+                                                        "w-full h-full object-contain cursor-zoom-in transition-transform duration-300 ease-out select-none"
+                                                    },
+                                                    style: format!("cursor: {}; {}",
+                                                        if *is_zoomed.read() { "zoom-out" } else { "zoom-in" },
+                                                        transform_style()
+                                                    ),
+                                                    loading: "eager",
+
+                                                    onclick: move |evt| {
+                                                        if *is_zoomed.read() {
+                                                            // Zoom out
+                                                            is_zoomed.set(false);
+                                                            transform_style.set("transform: scale(1)".to_string());
+                                                        } else {
+                                                            // Zoom in
+                                                            is_zoomed.set(true);
+
+                                                            // Get click coordinates
+                                                            let client_x = evt.client_coordinates().x;
+                                                            let client_y = evt.client_coordinates().y;
+
+                                                            // Use eval to get the bounding rect and calculate position
+                                                            spawn(async move {
+                                                                let eval_result = document::eval(&format!(r#"
+                                                                    const img = document.getElementById('zoomable-image');
+                                                                    const rect = img.getBoundingClientRect();
+                                                                    const relX = ({} - rect.left) / rect.width;
+                                                                    const relY = ({} - rect.top) / rect.height;
+
+                                                                    // Clamp values between 0 and 1
+                                                                    const clampedX = Math.max(0, Math.min(1, relX));
+                                                                    const clampedY = Math.max(0, Math.min(1, relY));
+
+                                                                    return {{ x: clampedX, y: clampedY }};
+                                                                "#, client_x, client_y)).await;
+
+                                                                if let Ok(result) = eval_result {
+                                                                    if let Some(coords) = result.as_object() {
+                                                                        let rel_x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.5);
+                                                                        let rel_y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.5);
+
+                                                                        // Zoom scale factor (adjust as needed)
+                                                                        let zoom_scale = 2.0;
+
+                                                                        // Calculate translation to keep zoomed image within bounds
+                                                                        let max_translate = (zoom_scale - 1.0) * 50.0;
+
+                                                                        // Calculate where to position the image based on click position
+                                                                        let translate_x: f64 = (0.5 - rel_x) * 100.0 * (zoom_scale - 1.0);
+                                                                        let translate_y: f64 = (0.5 - rel_y) * 100.0 * (zoom_scale - 1.0);
+
+                                                                        // Clamp translations to prevent image from going out of bounds
+                                                                        let clamped_translate_x = translate_x.max(-max_translate).min(max_translate);
+                                                                        let clamped_translate_y = translate_y.max(-max_translate).min(max_translate);
+
+                                                                        // Apply the transformation
+                                                                        transform_style.set(format!(
+                                                                            "transform: scale({}) translate({}%, {}%)",
+                                                                            zoom_scale,
+                                                                            clamped_translate_x / zoom_scale,
+                                                                            clamped_translate_y / zoom_scale
+                                                                        ));
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                    },
+
+                                                    // Optional: Allow mouse move while zoomed to pan around
+                                                    onmousemove: move |evt| {
+                                                        if *is_zoomed.read() {
+                                                            let client_x = evt.client_coordinates().x;
+                                                            let client_y = evt.client_coordinates().y;
+
+                                                            spawn(async move {
+                                                                let eval_result = document::eval(&format!(r#"
+                                                                    const img = document.getElementById('zoomable-image');
+                                                                    const rect = img.getBoundingClientRect();
+                                                                    const relX = ({} - rect.left) / rect.width;
+                                                                    const relY = ({} - rect.top) / rect.height;
+
+                                                                    const clampedX = Math.max(0, Math.min(1, relX));
+                                                                    const clampedY = Math.max(0, Math.min(1, relY));
+
+                                                                    return {{ x: clampedX, y: clampedY }};
+                                                                "#, client_x, client_y)).await;
+
+                                                                if let Ok(result) = eval_result {
+                                                                    if let Some(coords) = result.as_object() {
+                                                                        let rel_x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.5);
+                                                                        let rel_y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.5);
+
+                                                                        let zoom_scale = 2.5;
+                                                                        let max_translate = (zoom_scale - 1.0) * 50.0;
+
+                                                                        let translate_x: f64 = (0.5 - rel_x) * 100.0 * (zoom_scale - 1.0);
+                                                                        let translate_y: f64 = (0.5 - rel_y) * 100.0 * (zoom_scale - 1.0);
+
+                                                                        let clamped_translate_x = translate_x.max(-max_translate).min(max_translate);
+                                                                        let clamped_translate_y = translate_y.max(-max_translate).min(max_translate);
+
+                                                                        transform_style.set(format!(
+                                                                            "transform: scale({}) translate({}%, {}%)",
+                                                                            zoom_scale,
+                                                                            clamped_translate_x / zoom_scale,
+                                                                            clamped_translate_y / zoom_scale
+                                                                        ));
+                                                                    }
+                                                                }
+                                                            });
+                                                        }
+                                                    },
+
+                                                    // Reset on mouse leave
+                                                    onmouseleave: move |_| {
+                                                        if *is_zoomed.read() {
+                                                            is_zoomed.set(false);
+                                                            transform_style.set("transform: scale(1)".to_string());
+                                                        }
+                                                    },
+
+                                                    // Prevent drag behavior
+                                                    ondragstart: move |evt| evt.prevent_default()
+                                                }
+                                            }
+                                        }
+                                    } else if product.smiles.is_some() && product.enable_render_if_smiles {
+                                        rsx! {
+                                            div {
+                                                title: t!("mol-info"),
+                                                class: "flex items-center justify-center h-full text-gray-500",
+
+                                                SmilesViewer {
+                                                    smiles: product.smiles.clone().unwrap().clone()
+                                                }
+
+                                            }
+                                        }
+                                    } else {
+                                        rsx! {
+                                            div {
+                                                class: "flex items-center justify-center h-full text-gray-500",
+                                                { t!("no-thumbnail") }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                /*
+
+                                // Mailing List for Out of Stock Products
+                                if (product.force_no_stock || current_stock_quantity() == 0) && !*close_stock_updates.read() {
+                                    div {
+                                        class: "absolute inset-x-0 top-0 w-full pt-4 pb-4 bg-white bg-opacity-60 text-black border-ui-border-base border-b",
+                                        div {
+                                            class: "left-0 right-0 mx-4",
+                                            button {
+                                                class: "absolute mr-8 cursor-pointer right-0 bg-transparent border-0 text-black",
+                                                onclick: move |_| close_stock_updates.set(true),
+                                                "X"
+                                            }
+
+                                            if sub_complete.read().is_empty() {
+                                                p { class: "text-base mb-2", { t!("receive-stock-updates") } }
+                                                if !*mail_join_open.read() {
+                                                    p { class: "text-sm text-gray-600", { t!("want-to-receive-updates", title: product.title.clone()) } }
+                                                    div { class: "flex mt-4 gap-x-2",
+                                                        a {
+                                                            target: "_blank",
+                                                            href: "https://x.com/",
+                                                            button {
+                                                                class: "text-sm border border-gray-300 px-5 py-2 rounded-md min-w-24 hover:bg-gray-100 hover:text-black",
+                                                                onclick: move |_| close_stock_updates.set(true),
+                                                                { t!("follow-on-x") }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    div { class: "mt-2",
+                                                        input {
+                                                            r#type: "text",
+                                                            placeholder: { t!("your-name-slash-nickname") },
+                                                            class: "w-full px-3 py-2 rounded-md text-black mb-2",
+                                                            value: "{sub_name}",
+                                                            oninput: move |evt| sub_name.set(evt.value())
+                                                        }
+                                                        input {
+                                                            r#type: "email",
+                                                            placeholder: { t!("your-email") },
+                                                            class: "w-full px-3 py-2 rounded-md text-black mb-2",
+                                                            value: "{sub_email}",
+                                                            oninput: move |evt| sub_email.set(evt.value())
+                                                        }
+                                                        p { class: "text-xs text-gray-300 mb-2", { t!("you-can-unsub") } }
+                                                        if !sub_name.read().is_empty() && !sub_email.read().is_empty() && validate_email(&sub_email.read()) {
+                                                            button {
+                                                                class: "text-sm border border-white px-5 py-2 rounded-md min-w-24 hover:bg-gray-100 hover:text-black",
+                                                                onclick: move |_| {
+                                                                    sub_complete.set("true".to_string());
+                                                                },
+                                                                { t!("subscribe") }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } else if *sub_complete.read() == "true" {
+                                                { t!("joined-mailing") }
+                                            } else if *sub_complete.read() == "error" {
+                                                { t!("failed-mailing") }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                */
+                            }
+
+                            // Thumbnails Row
+                            div {
+                                id: "img_row",
+                                class: "flex justify-center mt-3.5 overflow-x-auto",
+
+                                // Variant thumbnails
+                                {
+                                    if let Some(ref variants) = product.variants {
+                                        let current_variant_idx = *current_variant.read();
+                                        if let Some(current_variant) = variants.get(current_variant_idx) {
+                                            let has_main_thumbnail = current_variant.thumbnail_url.is_some();
+                                            let has_additional_thumbnails = current_variant.additional_thumbnail_urls
+                                                .as_ref()
+                                                .map(|thumbs| !thumbs.is_empty())
+                                                .unwrap_or(false);
+
+                                            // Only show thumbnails if at least one exists
+                                            if has_main_thumbnail || has_additional_thumbnails {
+                                                rsx! {
+                                                    div {
+                                                        class: "flex flex-nowrap mt-4 px-1.5", // Removed gap, will use margins instead
+
+                                                        // Main thumbnail (if exists)
+                                                        {
+                                                            if let Some(ref thumbnail_url) = current_variant.thumbnail_url {
+                                                                let thumbnail_clone = thumbnail_url.clone();
+                                                                rsx! {
+                                                                    div {
+                                                                        key: "{\"main-thumb\"}",
+                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
+                                                                        onclick: move |_| preview_url.set(thumbnail_clone.clone()),
+                                                                        img {
+                                                                            alt: { format!("{} {}", product.title, t!("thumbnail")) },
+                                                                            src: "{thumbnail_url}",
+                                                                            class: "w-full h-full object-cover",
+                                                                            loading: "lazy"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                rsx! {}
+                                                            }
+                                                        }
+
+                                                        // Additional thumbnails (if they exist)
+                                                        {
+                                                            if let Some(ref additional_thumbnails) = current_variant.additional_thumbnail_urls {
+                                                                rsx! {
+                                                                    {additional_thumbnails.iter().enumerate().map(|(i, thumbnail_url)| {
+                                                                        let thumbnail_clone = thumbnail_url.clone();
+                                                                        rsx! {
+                                                                            div {
+                                                                                key: "{i}",
+                                                                                class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
+                                                                                onclick: move |_| preview_url.set(thumbnail_clone.clone()),
+                                                                                img {
+                                                                                    alt: { format!("{} {} {}", product.title, t!("additional-thumbnail"), i) },
+                                                                                    src: "{thumbnail_url}",
+                                                                                    class: "w-full h-full object-cover",
+                                                                                    loading: "lazy"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    })}
+                                                                }
+                                                            } else {
+                                                                rsx! {}
+                                                            }
+                                                        }
+
+                                                        // Molecule thumbnail (if available and has other thumbnails)
+                                                        if product.smiles.is_some() && product.enable_render_if_smiles {
+                                                            if let Some(ref variants) = product.variants {
+                                                                if variants.iter().any(|v| v.thumbnail_url.is_some()) {
+                                                                    div {
+                                                                        title: { t!("mol-info") },
+                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md border-ui-border-base border overflow-hidden flex items-center justify-center mr-1.5",
+                                                                        onclick: move |_| preview_url.set("smiles".to_string()),
+                                                                        div {
+                                                                            class: "w-full h-full",
+                                                                            SmilesViewer {
+                                                                                smiles: product.smiles.clone().unwrap().clone()
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                rsx! {}
+                                            }
+                                        } else {
+                                            rsx! {}
+                                        }
+                                    } else {
+                                        rsx! {}
+                                    }
+                                }
+                            }
+                        }
+
+                        // Product Information Section (NOW ON RIGHT)
                         div {
                             class: "md:sticky md:min-w-[49%] md:top-48 md:w-[400px] text-bbase",
 
@@ -792,352 +1142,6 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                         { t!("terms-and-conditions") }
                                     }
                                     { format!(" {}", t!("prior-to-ordering")) }
-                                }
-                            }
-                        }
-
-                        // Product Image and Thumbnails Section
-                        div {
-                            class: "flex-grow md:w-[400px]",
-
-                            // Main Image
-                            div {
-                                class: "relative aspect-square rounded-lg overflow-hidden shadow-lg border-ui-border-base border",
-
-                                {
-                                    let preview = &*preview_url.read();
-                                    if !preview.is_empty() && preview != "smiles" {
-                                        // Add state for zoom
-                                        let mut is_zoomed = use_signal(|| false);
-                                        let mut transform_style = use_signal(|| String::from("transform: scale(1)"));
-
-                                        rsx! {
-                                            div {
-                                                class: if *is_zoomed.read() {
-                                                    "cursor-zoom-out relative w-full h-full overflow-hidden"
-                                                } else {
-                                                    "cursor-zoom-in relative w-full h-full overflow-hidden"
-                                                },
-
-                                                img {
-                                                    id: "zoomable-image",
-                                                    alt: format!("{} {}", product.title, t!("thumbnail")),
-                                                    src: "{preview}",
-                                                    class: if *is_zoomed.read() {
-                                                        "absolute object-contain cursor-zoom-out transition-transform duration-300 ease-out select-none"
-                                                    } else {
-                                                        "w-full h-full object-contain cursor-zoom-in transition-transform duration-300 ease-out select-none"
-                                                    },
-                                                    style: format!("cursor: {}; {}",
-                                                        if *is_zoomed.read() { "zoom-out" } else { "zoom-in" },
-                                                        transform_style()
-                                                    ),
-                                                    loading: "eager",
-
-                                                    onclick: move |evt| {
-                                                        if *is_zoomed.read() {
-                                                            // Zoom out
-                                                            is_zoomed.set(false);
-                                                            transform_style.set("transform: scale(1)".to_string());
-                                                        } else {
-                                                            // Zoom in
-                                                            is_zoomed.set(true);
-
-                                                            // Get click coordinates
-                                                            let client_x = evt.client_coordinates().x;
-                                                            let client_y = evt.client_coordinates().y;
-
-                                                            // Use eval to get the bounding rect and calculate position
-                                                            spawn(async move {
-                                                                let eval_result = document::eval(&format!(r#"
-                                                                    const img = document.getElementById('zoomable-image');
-                                                                    const rect = img.getBoundingClientRect();
-                                                                    const relX = ({} - rect.left) / rect.width;
-                                                                    const relY = ({} - rect.top) / rect.height;
-
-                                                                    // Clamp values between 0 and 1
-                                                                    const clampedX = Math.max(0, Math.min(1, relX));
-                                                                    const clampedY = Math.max(0, Math.min(1, relY));
-
-                                                                    return {{ x: clampedX, y: clampedY }};
-                                                                "#, client_x, client_y)).await;
-
-                                                                if let Ok(result) = eval_result {
-                                                                    if let Some(coords) = result.as_object() {
-                                                                        let rel_x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.5);
-                                                                        let rel_y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.5);
-
-                                                                        // Zoom scale factor (adjust as needed)
-                                                                        let zoom_scale = 2.0;
-
-                                                                        // Calculate translation to keep zoomed image within bounds
-                                                                        let max_translate = (zoom_scale - 1.0) * 50.0;
-
-                                                                        // Calculate where to position the image based on click position
-                                                                        let translate_x: f64 = (0.5 - rel_x) * 100.0 * (zoom_scale - 1.0);
-                                                                        let translate_y: f64 = (0.5 - rel_y) * 100.0 * (zoom_scale - 1.0);
-
-                                                                        // Clamp translations to prevent image from going out of bounds
-                                                                        let clamped_translate_x = translate_x.max(-max_translate).min(max_translate);
-                                                                        let clamped_translate_y = translate_y.max(-max_translate).min(max_translate);
-
-                                                                        // Apply the transformation
-                                                                        transform_style.set(format!(
-                                                                            "transform: scale({}) translate({}%, {}%)",
-                                                                            zoom_scale,
-                                                                            clamped_translate_x / zoom_scale,
-                                                                            clamped_translate_y / zoom_scale
-                                                                        ));
-                                                                    }
-                                                                }
-                                                            });
-                                                        }
-                                                    },
-
-                                                    // Optional: Allow mouse move while zoomed to pan around
-                                                    onmousemove: move |evt| {
-                                                        if *is_zoomed.read() {
-                                                            let client_x = evt.client_coordinates().x;
-                                                            let client_y = evt.client_coordinates().y;
-
-                                                            spawn(async move {
-                                                                let eval_result = document::eval(&format!(r#"
-                                                                    const img = document.getElementById('zoomable-image');
-                                                                    const rect = img.getBoundingClientRect();
-                                                                    const relX = ({} - rect.left) / rect.width;
-                                                                    const relY = ({} - rect.top) / rect.height;
-
-                                                                    const clampedX = Math.max(0, Math.min(1, relX));
-                                                                    const clampedY = Math.max(0, Math.min(1, relY));
-
-                                                                    return {{ x: clampedX, y: clampedY }};
-                                                                "#, client_x, client_y)).await;
-
-                                                                if let Ok(result) = eval_result {
-                                                                    if let Some(coords) = result.as_object() {
-                                                                        let rel_x = coords.get("x").and_then(|v| v.as_f64()).unwrap_or(0.5);
-                                                                        let rel_y = coords.get("y").and_then(|v| v.as_f64()).unwrap_or(0.5);
-
-                                                                        let zoom_scale = 2.5;
-                                                                        let max_translate = (zoom_scale - 1.0) * 50.0;
-
-                                                                        let translate_x: f64 = (0.5 - rel_x) * 100.0 * (zoom_scale - 1.0);
-                                                                        let translate_y: f64 = (0.5 - rel_y) * 100.0 * (zoom_scale - 1.0);
-
-                                                                        let clamped_translate_x = translate_x.max(-max_translate).min(max_translate);
-                                                                        let clamped_translate_y = translate_y.max(-max_translate).min(max_translate);
-
-                                                                        transform_style.set(format!(
-                                                                            "transform: scale({}) translate({}%, {}%)",
-                                                                            zoom_scale,
-                                                                            clamped_translate_x / zoom_scale,
-                                                                            clamped_translate_y / zoom_scale
-                                                                        ));
-                                                                    }
-                                                                }
-                                                            });
-                                                        }
-                                                    },
-
-                                                    // Reset on mouse leave
-                                                    onmouseleave: move |_| {
-                                                        if *is_zoomed.read() {
-                                                            is_zoomed.set(false);
-                                                            transform_style.set("transform: scale(1)".to_string());
-                                                        }
-                                                    },
-
-                                                    // Prevent drag behavior
-                                                    ondragstart: move |evt| evt.prevent_default()
-                                                }
-                                            }
-                                        }
-                                    } else if product.smiles.is_some() && product.enable_render_if_smiles {
-                                        rsx! {
-                                            div {
-                                                title: t!("mol-info"),
-                                                class: "flex items-center justify-center h-full text-gray-500",
-
-                                                SmilesViewer {
-                                                    smiles: product.smiles.clone().unwrap().clone()
-                                                }
-
-                                            }
-                                        }
-                                    } else {
-                                        rsx! {
-                                            div {
-                                                class: "flex items-center justify-center h-full text-gray-500",
-                                                { t!("no-thumbnail") }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Mailing List for Out of Stock Products (rest remains the same)
-                                if (product.force_no_stock || current_stock_quantity() == 0) && !*close_stock_updates.read() {
-                                    div {
-                                        class: "absolute inset-x-0 top-0 w-full pt-4 pb-4 bg-white bg-opacity-60 text-black border-ui-border-base border-b",
-                                        div {
-                                            class: "left-0 right-0 mx-4",
-                                            button {
-                                                class: "absolute mr-8 cursor-pointer right-0 bg-transparent border-0 text-black",
-                                                onclick: move |_| close_stock_updates.set(true),
-                                                "X"
-                                            }
-
-                                            if sub_complete.read().is_empty() {
-                                                p { class: "text-base mb-2", { t!("receive-stock-updates") } }
-                                                if !*mail_join_open.read() {
-                                                    p { class: "text-sm text-gray-600", { t!("want-to-receive-updates", title: product.title.clone()) } }
-                                                    div { class: "flex mt-4 gap-x-2",
-                                                        a {
-                                                            target: "_blank",
-                                                            href: "https://x.com/PenchantBio",
-                                                            button {
-                                                                class: "text-sm border border-gray-300 px-5 py-2 rounded-md min-w-24 hover:bg-gray-100 hover:text-black",
-                                                                onclick: move |_| close_stock_updates.set(true),
-                                                                { t!("follow-on-x") }
-                                                            }
-                                                        }
-                                                    }
-                                                } else {
-                                                    div { class: "mt-2",
-                                                        input {
-                                                            r#type: "text",
-                                                            placeholder: { t!("your-name-slash-nickname") },
-                                                            class: "w-full px-3 py-2 rounded-md text-black mb-2",
-                                                            value: "{sub_name}",
-                                                            oninput: move |evt| sub_name.set(evt.value())
-                                                        }
-                                                        input {
-                                                            r#type: "email",
-                                                            placeholder: { t!("your-email") },
-                                                            class: "w-full px-3 py-2 rounded-md text-black mb-2",
-                                                            value: "{sub_email}",
-                                                            oninput: move |evt| sub_email.set(evt.value())
-                                                        }
-                                                        p { class: "text-xs text-gray-300 mb-2", { t!("you-can-unsub") } }
-                                                        if !sub_name.read().is_empty() && !sub_email.read().is_empty() && validate_email(&sub_email.read()) {
-                                                            button {
-                                                                class: "text-sm border border-white px-5 py-2 rounded-md min-w-24 hover:bg-gray-100 hover:text-black",
-                                                                onclick: move |_| {
-                                                                    sub_complete.set("true".to_string());
-                                                                },
-                                                                { t!("subscribe") }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else if *sub_complete.read() == "true" {
-                                                { t!("joined-mailing") }
-                                            } else if *sub_complete.read() == "error" {
-                                                { t!("failed-mailing") }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Thumbnails Row
-                            div {
-                                id: "img_row",
-                                class: "flex justify-center mt-3.5 overflow-x-auto",
-
-                                // Variant thumbnails
-                                {
-                                    if let Some(ref variants) = product.variants {
-                                        let current_variant_idx = *current_variant.read();
-                                        if let Some(current_variant) = variants.get(current_variant_idx) {
-                                            let has_main_thumbnail = current_variant.thumbnail_url.is_some();
-                                            let has_additional_thumbnails = current_variant.additional_thumbnail_urls
-                                                .as_ref()
-                                                .map(|thumbs| !thumbs.is_empty())
-                                                .unwrap_or(false);
-
-                                            // Only show thumbnails if at least one exists
-                                            if has_main_thumbnail || has_additional_thumbnails {
-                                                rsx! {
-                                                    div {
-                                                        class: "flex flex-nowrap mt-4 px-1.5", // Removed gap, will use margins instead
-
-                                                        // Main thumbnail (if exists)
-                                                        {
-                                                            if let Some(ref thumbnail_url) = current_variant.thumbnail_url {
-                                                                let thumbnail_clone = thumbnail_url.clone();
-                                                                rsx! {
-                                                                    div {
-                                                                        key: "{\"main-thumb\"}",
-                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
-                                                                        onclick: move |_| preview_url.set(thumbnail_clone.clone()),
-                                                                        img {
-                                                                            alt: { format!("{} {}", product.title, t!("thumbnail")) },
-                                                                            src: "{thumbnail_url}",
-                                                                            class: "w-full h-full object-cover",
-                                                                            loading: "lazy"
-                                                                        }
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                rsx! {}
-                                                            }
-                                                        }
-
-                                                        // Additional thumbnails (if they exist)
-                                                        {
-                                                            if let Some(ref additional_thumbnails) = current_variant.additional_thumbnail_urls {
-                                                                rsx! {
-                                                                    {additional_thumbnails.iter().enumerate().map(|(i, thumbnail_url)| {
-                                                                        let thumbnail_clone = thumbnail_url.clone();
-                                                                        rsx! {
-                                                                            div {
-                                                                                key: "{i}",
-                                                                                class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
-                                                                                onclick: move |_| preview_url.set(thumbnail_clone.clone()),
-                                                                                img {
-                                                                                    alt: { format!("{} {} {}", product.title, t!("additional-thumbnail"), i) },
-                                                                                    src: "{thumbnail_url}",
-                                                                                    class: "w-full h-full object-cover",
-                                                                                    loading: "lazy"
-                                                                                }
-                                                                            }
-                                                                        }
-                                                                    })}
-                                                                }
-                                                            } else {
-                                                                rsx! {}
-                                                            }
-                                                        }
-
-                                                        // Molecule thumbnail (if available and has other thumbnails)
-                                                        if product.smiles.is_some() && product.enable_render_if_smiles {
-                                                            if let Some(ref variants) = product.variants {
-                                                                if variants.iter().any(|v| v.thumbnail_url.is_some()) {
-                                                                    div {
-                                                                        title: { t!("mol-info") },
-                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md border-ui-border-base border overflow-hidden flex items-center justify-center mr-1.5",
-                                                                        onclick: move |_| preview_url.set("smiles".to_string()),
-                                                                        div {
-                                                                            class: "w-full h-full",
-                                                                            SmilesViewer {
-                                                                                smiles: product.smiles.clone().unwrap().clone()
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                rsx! {}
-                                            }
-                                        } else {
-                                            rsx! {}
-                                        }
-                                    } else {
-                                        rsx! {}
-                                    }
                                 }
                             }
                         }

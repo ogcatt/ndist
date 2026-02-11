@@ -182,6 +182,22 @@ pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, Se
         .next()
         .ok_or_else(|| ServerFnError::new("Product not found".to_string()))?;
 
+    // Check visibility permissions
+    let is_admin = check_admin_permission().await.is_ok();
+
+    match product_model.visibility {
+        sea_orm_active_enums::ProductVisibility::Private => {
+            // Private products only visible to admins
+            if !is_admin {
+                return Ok(None);
+            }
+        }
+        sea_orm_active_enums::ProductVisibility::Unlisted |
+        sea_orm_active_enums::ProductVisibility::Public => {
+            // Unlisted and public products are accessible to everyone
+        }
+    }
+
     // Fetch variant relations and stock quantities
     let (variant_relations_result, stock_qty_results_result) = tokio::join!(
         async {
@@ -395,8 +411,10 @@ pub async fn admin_create_product(
         brand: ActiveValue::Set(request.brand),
         priority: ActiveValue::Set(request.priority),
         back_order: ActiveValue::Set(request.back_order),
-        mechanism: ActiveValue::NotSet,
+        mechanism: ActiveValue::NotSet, // Update this later so the UI can pass data to this
         metadata: ActiveValue::NotSet,
+        access_groups: ActiveValue::NotSet, // Update this later so the UI can pass data to this
+        show_private_preview: ActiveValue::Set(false), // Ditto
         created_at: ActiveValue::Set(now),
         updated_at: ActiveValue::Set(now),
     };

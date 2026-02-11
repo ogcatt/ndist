@@ -86,6 +86,10 @@ pub struct Model {
     pub metadata: Option<String>,
     #[sea_orm(column_name = "backOrder")]
     pub back_order: bool, // default: false
+    #[sea_orm(nullable)]
+    pub access_groups: Option<Vec<String>>,
+    //#[sea_orm(column_name = "show_private_preview")]
+    pub show_private_preview: bool, // default: false
 }
 
 // Remove the helper methods since we're now using Vec<String> directly
@@ -93,6 +97,10 @@ impl Model {
     // You can still add helper methods if needed, but they're simpler now
     pub fn get_alternate_names(&self) -> Vec<String> {
         self.alternate_names.clone().unwrap_or_default()
+    }
+
+    pub fn get_access_groups(&self) -> Vec<String> {
+        self.access_groups.clone().unwrap_or_default()
     }
 }
 

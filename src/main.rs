@@ -33,7 +33,7 @@ use views::{
     About, AdminAnalytics, AdminContent, AdminCreateBlogPost, AdminCreateDiscount,
     AdminCreateProduct, AdminCreateStockItem, AdminCustomers, AdminDiscounts, AdminEditBlogPost,
     AdminEditDiscount, AdminEditProduct, AdminEditStockItem, AdminInventory, AdminOrders,
-    AdminProducts, AdminSettings, BlogPostPage, BlogPosts, Cart, Checkout, CheckoutPayment,
+    AdminProducts, AdminSettings, AdminCreateGroup, AdminEditGroup, AdminGroups, BlogPostPage, BlogPosts, Cart, Checkout, CheckoutPayment,
     Collection, Collections, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound,
     OrderStatus, PeptideCalculator, Policies, ProductPage, ShippingPolicy, SignIn as AdminSignIn,
     VerifyMagicLink,
@@ -134,6 +134,14 @@ enum Route {
                 AdminCreateBlogPost {},
                 #[route("/edit/:id")]
                 AdminEditBlogPost { id: String },
+            #[end_nest]
+            #[nest("/dashboard/groups")]
+                #[route("")]
+                AdminGroups {},
+                #[route("/create")]
+                AdminCreateGroup {},
+                #[route("/edit/:id")]
+                AdminEditGroup { id: String },
             #[end_nest]
             #[route("/dashboard/analytics")]
             AdminAnalytics {},

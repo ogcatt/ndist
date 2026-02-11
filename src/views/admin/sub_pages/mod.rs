@@ -9,3 +9,6 @@ pub use admin_create_discount::*;
 
 pub mod admin_create_blog_post;
 pub use admin_create_blog_post::*;
+
+pub mod admin_create_group;
+pub use admin_create_group::*;

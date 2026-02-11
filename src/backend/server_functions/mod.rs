@@ -9,6 +9,7 @@ pub mod orders;
 pub mod products;
 pub mod stock_calculations;
 pub mod uploads;
+pub mod groups;
 
 // Re-export all public items to maintain backward compatibility
 pub use auth::*;
@@ -20,6 +21,7 @@ pub use orders::*;
 pub use products::*;
 pub use stock_calculations::*;
 pub use uploads::*;
+pub use groups::*;
 
 // Allow payments access with server_functions::payments
 pub use super::payments;

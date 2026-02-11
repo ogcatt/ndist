@@ -31,16 +31,11 @@ pub use admin_analytics::AdminAnalytics;
 mod admin_settings;
 pub use admin_settings::AdminSettings;
 
+mod admin_groups;
+pub use admin_groups::AdminGroups;
+
 // SUB-PAGES
 // SUB-PAGES:
 
 mod sub_pages;
-pub use sub_pages::AdminCreateBlogPost;
-pub use sub_pages::AdminCreateDiscount;
-pub use sub_pages::AdminCreateProduct;
-pub use sub_pages::AdminCreateStockItem;
-pub use sub_pages::AdminEditDiscount;
-pub use sub_pages::AdminEditProduct;
-pub use sub_pages::AdminEditStockItem;
-pub use sub_pages::AdminEditBlogPost;
-pub use sub_pages::AdminProduct;
+pub use sub_pages::*;
