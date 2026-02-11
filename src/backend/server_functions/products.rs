@@ -12,7 +12,8 @@ use super::super::entity_conversions;
 
 #[cfg(feature = "server")]
 use entity::{
-    product_variant_stock_item_relations, product_variants, products, sea_orm_active_enums,
+    group_members, product_variant_stock_item_relations, product_variants, products,
+    sea_orm_active_enums,
 };
 
 #[cfg(feature = "server")]
@@ -96,6 +97,66 @@ pub struct CreateProductResponse {
     pub product_id: Option<String>,
 }
 
+#[cfg(feature = "server")]
+async fn get_user_group_ids(user_id: &str) -> Result<HashSet<String>, ServerFnError> {
+    let db = get_db().await;
+    let group_memberships = group_members::Entity::find()
+        .filter(group_members::Column::UserId.eq(user_id))
+        .all(db)
+        .await
+        .map_db_err()?;
+
+    Ok(group_memberships.into_iter().map(|gm| gm.group_id).collect())
+}
+
+#[cfg(feature = "server")]
+fn user_has_product_access(
+    product_access_groups: &Option<Vec<String>>,
+    user_group_ids: &HashSet<String>,
+    is_admin: bool,
+) -> bool {
+    // Admin has access to everything
+    if is_admin {
+        return true;
+    }
+
+    // If no access groups specified, product is accessible to all
+    let Some(access_groups) = product_access_groups else {
+        return true;
+    };
+
+    // If access_groups is empty, treat as accessible to all
+    if access_groups.is_empty() {
+        return true;
+    }
+
+    // User must be in at least one of the access groups
+    access_groups.iter().any(|ag| user_group_ids.contains(ag))
+}
+
+#[cfg(feature = "server")]
+fn strip_product_to_preview(mut product: Product) -> Product {
+    // Keep only core information, strip sensitive/detailed data
+    product.small_description_md = None;
+    product.main_description_md = None;
+    product.alternate_names = Some(Vec::new());
+    product.cas = None;
+    product.iupac = None;
+    product.mol_form = None;
+    product.smiles = None;
+    product.pubchem_cid = None;
+    product.analysis_url_qnmr = None;
+    product.analysis_url_hplc = None;
+    product.analysis_url_qh1 = None;
+    product.dimensions_height = None;
+    product.dimensions_length = None;
+    product.dimensions_width = None;
+    product.purity = None;
+    product.mechanism = None;
+
+    product
+}
+
 #[server]
 pub async fn get_policies() -> Result<(String, String), ServerFnError> {
     let tos_content = include_str!("../../data/md/tos.md");
@@ -111,8 +172,10 @@ pub async fn get_policies() -> Result<(String, String), ServerFnError> {
 pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
     let db = get_db().await;
 
-    let (products_with_variants_result, variant_relations_result, stock_qty_results_result) =
+    // Get current user and their group memberships in parallel with products
+    let (user_result, products_with_variants_result, variant_relations_result, stock_qty_results_result) =
         tokio::join!(
+            get_current_user(),
             products::Entity::find()
                 .filter(
                     products::Column::Visibility
@@ -127,6 +190,16 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
             },
             get_stock_quantities_for_stock_items(None)
         );
+
+    let user = user_result?;
+    let is_admin = check_admin_permission().await.unwrap_or(false);
+
+    // Get user's group memberships
+    let user_group_ids = if let Some(ref user) = user {
+        get_user_group_ids(&user.id).await?
+    } else {
+        HashSet::new()
+    };
 
     let products_with_variants = products_with_variants_result.map_db_err()?;
     let variant_relations = variant_relations_result.map_db_err()?;
@@ -157,34 +230,56 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
 
     products = calculate_variant_stock_quantities(products, variant_relations, stock_qty_results);
 
-    return Ok(products);
+    // Filter products based on access groups
+    let filtered_products: Vec<Product> = products
+        .into_iter()
+        .filter_map(|product| {
+            let has_access = user_has_product_access(&product.access_groups, &user_group_ids, is_admin);
+
+            if has_access {
+                // User has full access
+                Some(product)
+            } else if product.show_private_preview {
+                Some(strip_product_to_preview(product))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(filtered_products)
 }
 
 #[server]
 pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, ServerFnError> {
     let db = get_db().await;
 
-    // Fetch product and variants, allowing unlisted/private products
-    let product_with_variants_result = products::Entity::find()
-        .filter(products::Column::Handle.eq(handle))
-        .find_with_related(product_variants::Entity)
-        .all(db)
-        .await
+    // Fetch product and variants in parallel with user info
+    let (product_with_variants_result, user_result) = tokio::join!(
+        products::Entity::find()
+            .filter(products::Column::Handle.eq(handle))
+            .find_with_related(product_variants::Entity)
+            .all(db),
+        get_current_user()
+    );
+
+    let products_with_variants = product_with_variants_result
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     // Check if product exists
-    if product_with_variants_result.is_empty() {
+    if products_with_variants.is_empty() {
         return Ok(None);
     }
 
-    let (product_model, variant_models) = product_with_variants_result
+    let (product_model, variant_models) = products_with_variants
         .into_iter()
         .next()
         .ok_or_else(|| ServerFnError::new("Product not found".to_string()))?;
 
-    // Check visibility permissions
-    let is_admin = check_admin_permission().await.is_ok();
+    let user = user_result?;
+    let is_admin = check_admin_permission().await.unwrap_or(false);
 
+    // Check visibility permissions first
     match product_model.visibility {
         sea_orm_active_enums::ProductVisibility::Private => {
             // Private products only visible to admins
@@ -194,8 +289,24 @@ pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, Se
         }
         sea_orm_active_enums::ProductVisibility::Unlisted |
         sea_orm_active_enums::ProductVisibility::Public => {
-            // Unlisted and public products are accessible to everyone
+            // Unlisted and public products - check access groups
         }
+    }
+
+    // Get user's group memberships
+    let user_group_ids = if let Some(ref user) = user {
+        get_user_group_ids(&user.id).await?
+    } else {
+        HashSet::new()
+    };
+
+    // Check if user has access to this product based on access_groups
+    let has_access = user_has_product_access(&product_model.access_groups, &user_group_ids, is_admin);
+
+    // For get_product_by_handle, if user doesn't have access, return None
+    // (show_private_preview only applies to the list view, not direct access)
+    if !has_access {
+        return Ok(None);
     }
 
     // Fetch variant relations and stock quantities

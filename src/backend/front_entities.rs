@@ -85,6 +85,10 @@ pub struct Product {
     pub mechanism: Option<String>,
     // Extra meatadata information (can be used to pass extra information without db change)
     pub metadata: Option<String>,
+    // If not null only these groups can access and purchase this product
+    pub access_groups: Option<Vec<String>>,
+    // If this is true then even if the product is gated to specific groups it shows a bare preview on home/product browser
+    pub show_private_preview: bool,
 
     // SUB-DATA
     pub variants: Option<Vec<ProductVariants>>, // Updated to use struct

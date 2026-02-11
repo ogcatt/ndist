@@ -13,7 +13,7 @@ use super::super::db::get_db;
 use super::super::email::EmailService;
 
 #[cfg(feature = "server")]
-use entity::{auth_tokens, user_sessions, users as entity_users};
+use entity::{auth_tokens, user_sessions, users as entity_users, group_members};
 
 #[cfg(feature = "server")]
 use sea_orm::{IntoActiveModel, ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, QueryFilter};
@@ -162,6 +162,7 @@ pub struct SessionInfo {
     pub email: String,
     pub name: String,
     pub admin: bool,
+    pub group_ids: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -635,17 +636,31 @@ pub async fn logout() -> Result<(), ServerFnError> {
 #[server]
 pub async fn get_session_info() -> Result<SessionInfo, ServerFnError> {
     match get_current_user().await {
-        Ok(Some(user)) => Ok(SessionInfo {
-            authenticated: true,
-            email: user.email,
-            name: user.name,
-            admin: user.admin,
-        }),
+        Ok(Some(user)) => {
+            // Fetch user's group memberships
+            let db = get_db().await;
+            let group_memberships = group_members::Entity::find()
+                .filter(group_members::Column::UserId.eq(&user.id))
+                .all(db)
+                .await
+                .map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?;
+
+            let group_ids = group_memberships.into_iter().map(|gm| gm.group_id).collect();
+
+            Ok(SessionInfo {
+                authenticated: true,
+                email: user.email,
+                name: user.name,
+                admin: user.admin,
+                group_ids,
+            })
+        },
         _ => Ok(SessionInfo {
             authenticated: false,
             email: String::new(),
             name: String::new(),
             admin: false,
+            group_ids: Vec::new(),
         }),
     }
 }

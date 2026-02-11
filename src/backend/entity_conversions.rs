@@ -323,6 +323,8 @@ fn convert_product_internal(
         back_order: model.back_order,
         mechanism: model.mechanism,
         metadata: model.metadata,
+        access_groups: model.access_groups,
+        show_private_preview: model.show_private_preview,
         variants: context.variants,
     }
 }
