@@ -85,6 +85,10 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
                     }
                 }
                 Err(e) => {
+                    // Don't show notification for loading state
+                    if e.to_string() == "Loading..." {
+                        return;
+                    }
                     notification_message.set(format!("Error loading group: {}", e));
                     notification_type.set("error".to_string());
                     show_notification.set(true);
@@ -348,15 +352,24 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
     };
 
     if is_edit_mode && !loaded() {
-        if group_resource().is_some_and(|r| r.is_err())
-            || group_resource()
-                .is_some_and(|r| r.as_ref().is_ok_and(|resp| !resp.success))
-        {
+        // Check loading state - avoid showing errors during initial load
+        let res = group_resource();
+        let res_ref = res.as_ref();
+
+        let is_still_loading = res.is_none()
+            || res_ref.is_some_and(|r| r.as_ref().is_err_and(|e| e.to_string() == "Loading..."));
+
+        let has_error = res_ref.is_some_and(|r| r.is_err())
+            || res_ref.is_some_and(|r| r.as_ref().is_ok_and(|resp| !resp.success));
+
+        if is_still_loading {
+            return rsx! { div { "Loading..." } };
+        }
+
+        if has_error {
             return rsx! {
                 div { class: "text-red-500", "Error loading group." }
             };
-        } else {
-            return rsx! { div { "Loading..." } };
         }
     }
 

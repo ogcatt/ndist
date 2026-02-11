@@ -4,7 +4,7 @@ use crate::Route;
 use dioxus::prelude::*;
 
 #[component]
-pub fn AdminCustomers() -> Element {
+pub fn AdminUsers() -> Element {
     rsx! {
         div {
             "customers"

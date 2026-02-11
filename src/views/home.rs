@@ -157,6 +157,7 @@ pub fn Home() -> Element {
                         }
 
                         // Bottom text section
+                        /*
                         div {
                             class: "text-center mt-16",
                             p {
@@ -165,12 +166,13 @@ pub fn Home() -> Element {
                                 a {
                                     class: "a",
                                     target: "_blank",
-                                    href: "https://x.com/PenchantBio",
+                                    href: "https://x.com/",
                                     { t!("x-twitter") }
                                 }
                                 "."
                             }
                         }
+                        */
 
                         // Mobile-only Categories section
                         div {
@@ -219,6 +221,7 @@ pub fn Home() -> Element {
                     class: "w-full content-container py-0 pt-10 pb-6 px-6",
 
                     // About Penchant Labs section
+                    /*
                     div {
                         class: "bg-graddy mt-12 mb-12 md:flex md:justify-center w-full border-ui-border-base border rounded-md md:max-h-80 overflow-hidden",
                         div {
@@ -274,6 +277,7 @@ pub fn Home() -> Element {
                             }
                         }
                     }
+                    */
 
                     // Shipping worldwide section
                     div {

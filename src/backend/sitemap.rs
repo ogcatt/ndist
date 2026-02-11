@@ -49,7 +49,7 @@ pub async fn generate_sitemap() -> Result<String, Box<dyn std::error::Error>> {
     );
 
     urls.push(
-        SitemapUrl::new(format!("{}/collections", base_url))
+        SitemapUrl::new(format!("{}/categories", base_url))
             .with_priority(0.9)
             .with_changefreq("daily")
     );
@@ -88,12 +88,6 @@ pub async fn generate_sitemap() -> Result<String, Box<dyn std::error::Error>> {
         SitemapUrl::new(format!("{}/blog", base_url))
             .with_priority(0.8)
             .with_changefreq("weekly")
-    );
-
-    urls.push(
-        SitemapUrl::new(format!("{}/peptide-calculator", base_url))
-            .with_priority(0.7)
-            .with_changefreq("monthly")
     );
 
     // Dynamic routes - Products

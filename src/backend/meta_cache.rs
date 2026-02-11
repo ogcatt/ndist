@@ -248,11 +248,11 @@ pub async fn refresh_meta_cache() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     new_cache.insert(
-        "/collections".to_string(),
+        "/categories".to_string(),
         MetaTags::new(
-            "Collections | Novel Distributions".to_string(),
-            "Browse our collections.".to_string(),
-            "https://noveldist.com/collections".to_string()
+            "Categories | Novel Distributions".to_string(),
+            "Browse our categories.".to_string(),
+            "https://noveldist.com/categories".to_string()
         )
     );
 

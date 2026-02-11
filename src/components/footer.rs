@@ -49,7 +49,7 @@ pub fn Footer() -> Element {
 
                     // Links grid
                     div {
-                        class: "grid grid-cols-2 gap-8 sm:gap-6 sm:grid-cols-3",
+                        class: "grid grid-cols-2 gap-8 sm:gap-6 sm:grid-cols-2",
 
                         // Collections section
                         div {
@@ -73,6 +73,7 @@ pub fn Footer() -> Element {
                         }
 
                         // Follow Us section
+                        /*
                         div {
                             h2 {
                                 class: "mb-6 text-sm font-semibold text-gray-900",
@@ -83,7 +84,7 @@ pub fn Footer() -> Element {
                                 li {
                                     class: "mb-4",
                                     a {
-                                        href: "https://twitter.com/penchantbio",
+                                        href: "https://twitter.com/",
                                         class: "hover:underline",
                                         { t!("twitter-bio") }
                                     }
@@ -91,13 +92,14 @@ pub fn Footer() -> Element {
                                 li {
                                     class: "",
                                     a {
-                                        href: "https://t.me/penchantbio",
+                                        href: "https://t.me/",
                                         class: "hover:underline",
                                         { t!("telegram") }
                                     }
                                 }
                             }
                         }
+                        */
 
                         // Important section
                         div {

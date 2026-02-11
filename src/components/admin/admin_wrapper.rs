@@ -96,11 +96,18 @@ pub fn AdminWrapper() -> Element {
                             label: "Orders"
                         }
                         SidebarItem {
-                            to: Route::AdminCustomers {},
+                            to: Route::AdminUsers {},
                             icon: rsx! {
                                 img { class: "w-5 h-5", src: asset!("/assets/icons/people.svg") },
                             },
-                            label: "Customers"
+                            label: "Users"
+                        }
+                        SidebarItem {
+                            to: Route::AdminGroups {},
+                            icon: rsx! {
+                                img { class: "w-5 h-5", src: asset!("/assets/icons/people-circle-outline.svg") },
+                            },
+                            label: "Groups"
                         }
                         SidebarItem {
                             to: Route::AdminProducts {},

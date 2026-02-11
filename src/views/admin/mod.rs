@@ -16,8 +16,8 @@ pub use admin_products::AdminProducts;
 mod admin_inventory;
 pub use admin_inventory::AdminInventory;
 
-mod admin_customers;
-pub use admin_customers::AdminCustomers;
+mod admin_users;
+pub use admin_users::AdminUsers;
 
 mod admin_discounts;
 pub use admin_discounts::AdminDiscounts;

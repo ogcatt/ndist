@@ -408,6 +408,7 @@ pub fn Header() -> Element {
                                 }
                             },
                             // Peptide Calculator link (no dropdown)
+                            /*
                             Link {
                                 to: Route::PeptideCalculator {},
                                 class: "h-full",
@@ -417,6 +418,7 @@ pub fn Header() -> Element {
                                     { t!("peptide-calculator") }
                                 }
                             }
+                            */
                         }
                     },
                     // Center section: Logo
@@ -771,6 +773,7 @@ pub fn Header() -> Element {
                                     }
                                 },
                                 // Peptide Calculator link
+                                /*
                                 li {
                                     Link {
                                         to: Route::PeptideCalculator {},
@@ -779,6 +782,7 @@ pub fn Header() -> Element {
                                         { t!("peptide-calculator") }
                                     }
                                 }
+                                */
                             }
                         }
 
