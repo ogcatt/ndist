@@ -156,7 +156,7 @@ pub fn AccountPopupContent(
         if secs <= 0 { return; }
         cooldown_seconds.set(secs);
         let mut remaining = secs;
-        
+
         spawn(async move {
             while remaining > 0 {
                 TimeoutFuture::new(1000).await;
@@ -326,7 +326,7 @@ pub fn AccountPopupContent(
                         h2 {
                             class: "text-2xl font-bold text-gray-900",
                             if step() == 0 {
-                                "Sign in"
+                                "Sign in/Sign up"
                             } else {
                                 "Enter Login Code"
                             }
