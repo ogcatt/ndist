@@ -2,6 +2,8 @@ use chrono::Local;
 use dioxus::prelude::*;
 use std::time::Duration;
 
+use crate::backend::front_entities::Product;
+
 #[cfg(feature = "web")]
 use js_sys::Date;
 #[cfg(feature = "web")]
@@ -1062,4 +1064,102 @@ pub fn get_cache_stats() -> Option<(usize, usize)> {
         }
     }
     None
+}
+
+/// Specialized hook for fetching a product by handle with intelligent caching.
+///
+/// This hook:
+/// 1. First checks if the product exists in the products list cache (instant if available)
+/// 2. Checks for an individual product cache by handle
+/// 3. Fetches the individual product by handle (works for unlisted products)
+/// 4. Caches the individual product by handle for future visits
+///
+/// This provides instant display for products that are in the cached products list,
+/// while still supporting unlisted products that only exist in the individual fetch.
+///
+/// Returns (product_signal, refresh_signal) where incrementing refresh_signal forces a fresh fetch.
+pub fn use_product_by_handle<F, Fut>(
+    handle: String,
+    fetcher: F,
+    cache_duration: Duration,
+) -> (Signal<Option<Product>>, Signal<u32>)
+where
+    F: Fn() -> Fut + Clone + 'static,
+    Fut: std::future::Future<Output = Result<Option<Product>, ServerFnError>> + 'static,
+{
+    let mut product_signal = use_signal(|| None::<Product>);
+    let refresh_trigger = use_signal(|| 0u32);
+    let products_cache_key = "cache_get_products".to_string();
+    let product_cache_key = format!("cache_product_{}", handle);
+    let duration_ms = cache_duration.as_secs_f64() * 1000.0;
+
+    // Main effect that responds to refresh_trigger
+    use_effect({
+        let handle = handle.clone();
+        let fetcher = fetcher.clone();
+        let product_cache_key = product_cache_key.clone();
+
+        move || {
+            // Subscribe to refresh_trigger
+            let _ = refresh_trigger.read();
+
+            spawn({
+                let handle = handle.clone();
+                let fetcher = fetcher.clone();
+                let products_cache_key = products_cache_key.clone();
+                let product_cache_key = product_cache_key.clone();
+
+                async move {
+                    let mut has_data = false;
+
+                    // Step 1: Try individual product cache first (most specific)
+                    #[cfg(feature = "web")]
+                    {
+                        if let Some(cached_product) = get_any_cached_data::<Product>(&product_cache_key) {
+                            tracing::info!("Loaded product from individual cache: {}", handle);
+                            product_signal.set(Some(cached_product));
+                            has_data = true;
+                        }
+                    }
+
+                    // Step 2: If no individual cache, try to find in products list cache
+                    #[cfg(feature = "web")]
+                    if !has_data {
+                        if let Some(products) = get_any_cached_data::<Vec<Product>>(&products_cache_key) {
+                            if let Some(product) = products.iter().find(|p| p.handle == handle) {
+                                tracing::info!("Found product in products list cache: {}", handle);
+                                product_signal.set(Some(product.clone()));
+                                has_data = true;
+                            }
+                        }
+                    }
+
+                    // Step 3: Fetch fresh data from server (always, for revalidation)
+                    match fetcher().await {
+                        Ok(Some(fresh_product)) => {
+                            tracing::info!("Fetched fresh product data: {}", handle);
+                            product_signal.set(Some(fresh_product.clone()));
+
+                            // Store in individual product cache
+                            #[cfg(feature = "web")]
+                            store_cached_data(&product_cache_key, &fresh_product, duration_ms);
+                        }
+                        Ok(None) => {
+                            // Product not found - this is valid for unlisted products that don't exist
+                            tracing::info!("Product not found: {}", handle);
+                            if !has_data {
+                                product_signal.set(None);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to fetch product {}: {:?}", handle, e);
+                            // Keep any existing cached data
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    (product_signal, refresh_trigger)
 }

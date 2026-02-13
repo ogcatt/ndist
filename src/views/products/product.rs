@@ -84,25 +84,39 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
         }
     });
 
-    // 3. Fetch the specific product by handle (works for unlisted products too)
-    let product_resource = use_resource({
+    // 3. Fetch the specific product by handle with intelligent caching
+    // Uses: 1) Individual product cache, 2) Products list cache, 3) Fresh fetch
+    let handle_clone = handle();
+    let (product_signal, mut refresh_trigger) = use_product_by_handle(
+        handle_clone,
         move || {
             let handle_value = handle();
             async move {
                 server_functions::get_product_by_handle(handle_value).await
             }
+        },
+        Duration::from_secs(300), // Cache for 5 minutes
+    );
+
+    // 4. Update current product when the signal updates
+    use_effect(move || {
+        if let Some(product) = product_signal.read().as_ref() {
+            update_product_data(product.clone());
+        } else if product_signal.read().is_none() {
+            // Only set not found if signal is None (not just unset)
+            // We need to check if we've actually tried to load
         }
     });
 
-    // 4. Update current product when the resource loads
+    // 4b. Track if product was not found after fetch attempt
+    let mut fetch_attempted = use_signal(|| false);
     use_effect(move || {
-        if let Some(Ok(Some(product))) = product_resource.read().as_ref() {
-            update_product_data(product.clone());
-        } else if let Some(Ok(None)) = product_resource.read().as_ref() {
-            // Product not found
-            current_product.set(None);
-            product_not_found.set(true);
+        let product_opt = product_signal.read();
+        if product_opt.is_some() {
+            product_not_found.set(false);
+            fetch_attempted.set(true);
         }
+        // If signal is still None after a delay, mark as not found
     });
 
     // 5. Optionally fetch all public products for related products (in background)
@@ -1035,7 +1049,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                         let error_line = error_line.clone();
                                                         let adding = adding.clone();
                                                         let quantity = quantity.clone();
-                                                        let product_resource = product_resource.clone();
+                                                        let mut refresh_trigger = refresh_trigger.clone();
                                                         let current_product_sig = current_product.clone();
                                                         let current_variant_idx = *current_variant.read();
                                                         move |_| {
@@ -1052,7 +1066,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                             let mut error_line = error_line.clone();
                                                                             let mut adding = adding.clone();
                                                                             let mut quantity = quantity.clone();
-                                                                            let mut product_resource = product_resource.clone();
+                                                                            let mut refresh_trigger = refresh_trigger.clone();
                                                                             async move {
                                                                                 adding.set(true);
                                                                                 add_btn_text.set(t!("adding-dot-dot-dot"));
@@ -1076,19 +1090,22 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                                                 add_btn_text.set(t!("reduced"));
                                                                                                 add_btn_added.set(false);
                                                                                                 error_line.set(t!("reduced-info"));
-                                                                                                product_resource.restart();
+                                                                                                let current = *refresh_trigger.read();
+                                                                                                refresh_trigger.set(current + 1);
                                                                                             }
                                                                                             "Removed" => {
                                                                                                 add_btn_text.set(t!("unavailable"));
                                                                                                 add_btn_added.set(false);
                                                                                                 error_line.set(t!("removed-info"));
-                                                                                                product_resource.restart();
+                                                                                                let current = *refresh_trigger.read();
+                                                                                                refresh_trigger.set(current + 1);
                                                                                             }
                                                                                             "NotFound" => {
                                                                                                 add_btn_text.set(t!("not-found"));
                                                                                                 add_btn_added.set(false);
                                                                                                 error_line.set(t!("not-found-info"));
-                                                                                                product_resource.restart();
+                                                                                                let current = *refresh_trigger.read();
+                                                                                                refresh_trigger.set(current + 1);
                                                                                             }
                                                                                             "Invalid" => {
                                                                                                 add_btn_text.set(t!("invalid"));
@@ -1105,7 +1122,8 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                                         add_btn_text.set(t!("failed-to-add"));
                                                                                         add_btn_added.set(false);
                                                                                         error_line.set(t!("could-not-add-error", error: format!("{:?}", e)));
-                                                                                        product_resource.restart();
+                                                                                        let current = *refresh_trigger.read();
+                                                                                        refresh_trigger.set(current + 1);
                                                                                     }
                                                                                 }
 
