@@ -6,8 +6,10 @@ use dioxus::prelude::*;
 use dioxus_i18n::{prelude::*, t};
 use std::rc::Rc;
 use std::str::FromStr;
+use std::time::Duration;
 
-use crate::backend::server_functions::{get_or_create_basket, get_products};
+use crate::backend::server_functions::{self, get_or_create_basket, get_products};
+use crate::backend::cache::use_hybrid_cache;
 use crate::utils::{GLOBAL_CART, countries::*, filter_products};
 
 use crate::components::{AccountButton, AccountMobileButton, AccountPopupProvider, SearchResults};
@@ -18,11 +20,43 @@ pub fn Header() -> Element {
     let mut open_menu = use_signal(|| false);
     let mut mobile_categories_open = use_signal(|| false);
     let mut mobile_about_open = use_signal(|| false);
+    let mut mobile_groups_open = use_signal(|| false);
     let mut mobile_research_open = use_signal(|| false);
 
     let mut search_bar_open = use_signal(|| false);
 
     let mut cart_total_quantity = use_signal(|| 0i32);
+
+    // Track which group is being hovered for the nested dropdown
+    let mut hovered_group_id = use_signal(|| None::<String>);
+
+    // Get session info using hybrid cache
+    let session_info = use_hybrid_cache(
+        "get_session_info",
+        || async { server_functions::get_session_info().await },
+        Duration::from_secs(60),
+    );
+
+    // Get groups data using hybrid cache (only if user has groups)
+    let has_groups = session_info
+        .read()
+        .as_ref()
+        .and_then(|r| r.as_ref().ok())
+        .map(|info| !info.group_ids.is_empty())
+        .unwrap_or(false);
+
+    let groups_data = use_hybrid_cache(
+        "get_user_groups",
+        || async { server_functions::get_user_groups().await },
+        Duration::from_secs(180),
+    );
+
+    // Get all products for filtering by group access
+    let all_products_data = use_hybrid_cache(
+        "get_products",
+        || async { server_functions::get_products().await },
+        Duration::from_secs(180),
+    );
 
     let mut cart_resource = use_resource(move || async move {
         get_or_create_basket().await
@@ -247,6 +281,117 @@ pub fn Header() -> Element {
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
                                         { t!("sarms-and-physical") }
                                     },
+                                }
+                            },
+                            // Groups dropdown (only show if user has groups)
+                            if has_groups {
+                                div {
+                                    class: "h-full relative group",
+                                    button {
+                                        class: "mr-5 relative text-nowrap h-full flex items-center transition-all ease-out duration-200 hover:text-ui-fg-base cursor-default",
+                                        title: t!("my-groups"),
+                                        { t!("groups") },
+                                        span {
+                                            style: "margin-top:2px;",
+                                            class: "pl-1.5",
+                                            img {
+                                                src: asset!("/assets/icons/down-arrow.svg"),
+                                                alt: "",
+                                                width: "11"
+                                            }
+                                        }
+                                    },
+                                    div {
+                                        class: "absolute w-max min-w-[250px] bg-white rounded-b-md shadow-lg z-10 hidden group-hover:block border border-gray-200 border-t-0",
+                                        if let Some(Ok(groups)) = groups_data.read().as_ref() {
+                                            if let Some(Ok(session)) = session_info.read().as_ref() {
+                                                // Filter groups to only show those the user is a member of
+                                                {
+                                                    let user_groups: Vec<_> = groups.iter()
+                                                        .filter(|g| session.group_ids.contains(&g.id))
+                                                        .collect();
+
+                                                    rsx! {
+                                                        for group in user_groups {
+                                                            div {
+                                                                class: "relative group/item",
+                                                                onmouseenter: move |_| {
+                                                                    hovered_group_id.set(Some(group.id.clone()));
+                                                                },
+                                                                onmouseleave: move |_| {
+                                                                    hovered_group_id.set(None);
+                                                                },
+                                                                Link {
+                                                                    to: Route::GroupPage { id: group.id.clone() },
+                                                                    class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
+                                                                    div {
+                                                                        class: "font-medium",
+                                                                        "{group.name}"
+                                                                    },
+                                                                    if let Some(description) = &group.description {
+                                                                        div {
+                                                                            class: "text-xs text-gray-500 mt-1 line-clamp-2",
+                                                                            "{description}"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                // Nested dropdown for products in this group
+                                                                if hovered_group_id.read().as_ref() == Some(&group.id) {
+                                                                    if let Some(Ok(products)) = all_products_data.read().as_ref() {
+                                                                        {
+                                                                            let group_products: Vec<_> = products.iter()
+                                                                                .filter(|p| {
+                                                                                    p.access_groups.as_ref()
+                                                                                        .map(|groups| groups.contains(&group.id))
+                                                                                        .unwrap_or(false)
+                                                                                })
+                                                                                .collect();
+
+                                                                            if !group_products.is_empty() {
+                                                                                rsx! {
+                                                                                    div {
+                                                                                        class: "absolute left-full top-0 ml-0 w-80 bg-white rounded-r-md shadow-lg border border-gray-200 border-l-0 max-h-96 overflow-y-auto",
+                                                                                        for product in group_products {
+                                                                                            Link {
+                                                                                                to: Route::ProductPage { handle: product.handle.clone() },
+                                                                                                class: "block px-4 py-3 hover:bg-gray-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0",
+                                                                                                div {
+                                                                                                    class: "font-medium text-gray-900 text-sm",
+                                                                                                    {
+                                                                                                        if product.title.contains("(") {
+                                                                                                            product.title.clone()
+                                                                                                        } else {
+                                                                                                            format!(
+                                                                                                                "{} ({})",
+                                                                                                                product.title,
+                                                                                                                product.product_form.to_frontend_string()
+                                                                                                            )
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                if let Some(subtitle) = &product.subtitle {
+                                                                                                    div {
+                                                                                                        class: "text-xs text-gray-500 mt-1",
+                                                                                                        "{subtitle}"
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            } else {
+                                                                                None
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             },
                             // About Us dropdown
@@ -580,6 +725,61 @@ pub fn Header() -> Element {
                                                 onclick: move |_| open_menu.set(false),
                                                 class: "block py-2 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
                                                 { t!("sarms-and-physical") }
+                                            }
+                                        }
+                                    }
+                                },
+
+                                // Groups section (mobile - only show if user has groups)
+                                if has_groups {
+                                    li {
+                                        button {
+                                            onclick: move |_| {
+                                                mobile_groups_open.set(!mobile_groups_open());
+                                            },
+                                            class: "w-full text-left py-3 px-4 flex text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-100",
+                                            { t!("groups") },
+                                            span {
+                                                class: "pl-2 self-center ml-auto",
+                                                img {
+                                                    src: asset!("/assets/icons/down-arrow.svg"),
+                                                    alt: "",
+                                                    width: "12"
+                                                }
+                                            }
+                                        },
+                                        if *mobile_groups_open.read() {
+                                            div {
+                                                class: "bg-gray-50 border-b border-gray-100",
+                                                if let Some(Ok(groups)) = groups_data.read().as_ref() {
+                                                    if let Some(Ok(session)) = session_info.read().as_ref() {
+                                                        {
+                                                            let user_groups: Vec<_> = groups.iter()
+                                                                .filter(|g| session.group_ids.contains(&g.id))
+                                                                .collect();
+
+                                                            rsx! {
+                                                                for group in user_groups {
+                                                                    Link {
+                                                                        to: Route::GroupPage { id: group.id.clone() },
+                                                                        onclick: move |_| open_menu.set(false),
+                                                                        class: "block py-3 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
+                                                                        div {
+                                                                            class: "font-medium",
+                                                                            "{group.name}"
+                                                                        },
+                                                                        if let Some(description) = &group.description {
+                                                                            div {
+                                                                                class: "text-xs text-gray-500 mt-1",
+                                                                                "{description}"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }

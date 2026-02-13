@@ -34,7 +34,7 @@ use views::{
     AdminCreateProduct, AdminCreateStockItem, AdminUsers, AdminDiscounts, AdminEditBlogPost,
     AdminEditDiscount, AdminEditProduct, AdminEditStockItem, AdminInventory, AdminOrders,
     AdminProducts, AdminSettings, AdminCreateGroup, AdminEditGroup, AdminGroups, BlogPostPage, BlogPosts, Cart, Checkout, CheckoutPayment,
-    Collection, Collections, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound,
+    Collection, Collections, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound, GroupPage,
     OrderStatus, PeptideCalculator, Policies, ProductPage, ShippingPolicy, SignIn as AdminSignIn,
     VerifyMagicLink,
 };
@@ -79,10 +79,8 @@ enum Route {
         BlogPostPage { id: String },
         #[route("/blog")]
         BlogPosts {},
-        /*
-        #[route("/peptide-calculator")]
-        PeptideCalculator {},
-        */
+        #[route("/groups/:id")]
+        GroupPage { id: String },
         #[route("/cart")]
         Cart {},
         #[route("/order/:order_id")]

@@ -866,6 +866,10 @@ h4 {
   left: 50%;
 }
 
+.left-full {
+  left: 100%;
+}
+
 .z-10 {
   z-index: 10;
 }
@@ -1176,6 +1180,10 @@ h4 {
   margin-left: 3rem;
 }
 
+.ml-0 {
+  margin-left: 0px;
+}
+
 .line-clamp-1 {
   overflow: hidden;
   display: -webkit-box;
@@ -1475,6 +1483,10 @@ h4 {
   width: max-content;
 }
 
+.w-80 {
+  width: 20rem;
+}
+
 .min-w-0 {
   min-width: 0px;
 }
@@ -1489,6 +1501,10 @@ h4 {
 
 .min-w-\[120px\] {
   min-width: 120px;
+}
+
+.min-w-\[250px\] {
+  min-width: 250px;
 }
 
 .max-w-2xl {
@@ -2005,6 +2021,10 @@ h4 {
 
 .border-t-2 {
   border-top-width: 2px;
+}
+
+.border-l-0 {
+  border-left-width: 0px;
 }
 
 .border-dashed {

@@ -144,9 +144,83 @@ pub struct SearchUsersResponse {
     pub users: Vec<UserSearchResult>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UserGroupInfo {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
+
 // ============================================================================
 // Server Functions
 // ============================================================================
+
+#[server]
+pub async fn get_user_groups() -> Result<Vec<UserGroupInfo>, ServerFnError> {
+    use tokio::try_join;
+
+    // Fetch user and db reference in parallel
+    let (user_result, db) = tokio::join!(
+        get_current_user(),
+        async { get_db().await }
+    );
+
+    let user = user_result?;
+
+    // Return empty vec if not authenticated
+    let user = match user {
+        Some(u) => u,
+        None => return Ok(Vec::new()),
+    };
+
+    // Clone user_id for use in the async block
+    let user_id = user.id.clone();
+
+    // Fetch group memberships and all groups in parallel
+    let (member_models_result, all_groups_result) = tokio::join!(
+        async {
+            group_members::Entity::find()
+                .filter(group_members::Column::UserId.eq(&user_id))
+                .all(db)
+                .await
+                .map_db_err()
+        },
+        async {
+            groups::Entity::find()
+                .all(db)
+                .await
+                .map_db_err()
+        }
+    );
+
+    let member_models = member_models_result?;
+    let all_groups = all_groups_result?;
+
+    // Extract group IDs from memberships
+    let user_group_ids: std::collections::HashSet<String> = member_models
+        .into_iter()
+        .map(|m| m.group_id)
+        .collect();
+
+    if user_group_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Filter groups to only those the user is a member of
+    let user_groups: Vec<UserGroupInfo> = all_groups
+        .into_iter()
+        .filter(|g| user_group_ids.contains(&g.id))
+        .map(|g| UserGroupInfo {
+            id: g.id,
+            name: g.name,
+            description: g.description,
+        })
+        .collect();
+
+    Ok(user_groups)
+}
+
+// ADMIN FUNCTIONS
 
 #[server]
 pub async fn admin_get_groups() -> Result<Vec<Group>, ServerFnError> {

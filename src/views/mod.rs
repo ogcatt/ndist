@@ -59,3 +59,6 @@ pub use order_status::*;
 
 mod dashboard;
 pub use dashboard::*;
+
+mod groups;
+pub use groups::*;
