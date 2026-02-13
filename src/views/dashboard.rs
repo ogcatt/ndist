@@ -152,7 +152,7 @@ pub fn UserDashboard() -> Element {
                 }
 
                 // Main content area - with left margin to account for fixed sidebar
-                div { class: "flex-1 ml-64 py-16 px-6 overflow-y-auto",
+                div { class: "flex-1 ml-64 py-8 px-6 overflow-y-auto",
                     match *current_page.read() {
                         DashboardPage::Overview => rsx! {
                             OverviewPage { session: session.clone(), groups_data: groups_data.clone(), all_products_data: all_products_data.clone() }
