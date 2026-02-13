@@ -3,6 +3,8 @@ use crate::components::account_popup::{use_global_session_state, SessionState};
 use crate::Route;
 use crate::backend::cache::{use_hybrid_cache, use_stale_while_revalidate};
 use crate::backend::server_functions;
+use crate::backend::server_functions::groups::UserGroupInfo;
+use crate::backend::front_entities::Product;
 use std::time::Duration;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -148,7 +150,7 @@ pub fn UserDashboard() -> Element {
 }
 
 #[component]
-fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<crate::backend::models::Group>>>, all_products_data: Signal<Option<Vec<crate::backend::models::Product>>>) -> Element {
+fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupInfo>>>, all_products_data: Signal<Option<Vec<Product>>>) -> Element {
     rsx! {
         div { class: "max-w-4xl",
             h2 { class: "text-2xl leading-7 text-gray-900 sm:text-3xl mb-8",

@@ -9,7 +9,7 @@ use std::pin::Pin;
 use gloo_timers::future::TimeoutFuture;
 
 // Session info for UI state
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SessionState {
     pub authenticated: bool,
     pub email: String,

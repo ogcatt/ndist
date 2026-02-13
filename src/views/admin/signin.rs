@@ -8,6 +8,7 @@ pub fn SignIn() -> Element {
         email: String::new(),
         name: String::new(),
         admin: false,
+        group_ids: Vec::new(),
     });
 
     rsx! {
