@@ -23,11 +23,6 @@ pub fn Header() -> Element {
     let mut search_bar_open = use_signal(|| false);
 
     let mut cart_total_quantity = use_signal(|| 0i32);
-    // Updated date checks to match svelte version
-    let now = Local::now();
-    let is_christmas = now.month() == 12 && (now.day() >= 18 && now.day() <= 31);
-    let is_new_year = now.month() == 1 && now.day() <= 3;
-    let is_ind_day = now.month() == 7 && now.day() == 4;
 
     let mut cart_resource = use_resource(move || async move {
         get_or_create_basket().await
@@ -164,10 +159,10 @@ pub fn Header() -> Element {
                 header {
                     class: "relative h-18 mx-auto border-b duration-200 bg-white border-ui-border-base",
                     nav {
-                        class: "content-container txt-xsmall-plus text-ui-fg-subtle flex items-center justify-between w-full h-full text-smm md:text-sm",
-                    // Left section: Mobile toggle and desktop menus
+                        class: "txt-xsmall-plus text-ui-fg-subtle flex items-center justify-between w-full h-full text-smm md:text-sm px-4 md:px-6",
+                    // Left section: Logo and Desktop navigation
                     div {
-                        class: "flex-1 basis-0 h-full flex items-center",
+                        class: "flex items-center h-full gap-x-6",
                         // Mobile menu toggle
                         div {
                             class: "h-full flex items-center md:hidden",
@@ -183,8 +178,20 @@ pub fn Header() -> Element {
                                 }
                             }
                         },
-                        // Desktop navigation - fixed container structure
-
+                        // Logo (left side on desktop, center on mobile handled below)
+                        div {
+                            class: "hidden md:flex items-center h-full",
+                            Link {
+                                to: Route::Home {},
+                                class: "fadeyy",
+                                img {
+                                    src: asset!("/assets/images/header.avif"),
+                                    alt: t!("brand").to_uppercase(),
+                                    class: "h-10 md:h-11 lg:h-12"
+                                }
+                            }
+                        },
+                        // Desktop navigation dropdowns
                         div {
                             class: "h-full hidden md:flex",
                             // Products dropdown
@@ -240,19 +247,6 @@ pub fn Header() -> Element {
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
                                         { t!("sarms-and-physical") }
                                     },
-                                    /*
-                                    hr {},
-                                    Link {
-                                        to: Route::Collection { codename: String::from("bodygen") },
-                                        class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 bg-cyan-50 transition-colors duration-200 ease-out",
-                                        { format!("{}{}", t!("bodygen"), t!("products")) }
-                                    },
-                                    Link {
-                                        to: Route::Collection { codename: String::from("pheroblend") },
-                                        class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 bg-cyan-50 transition-colors duration-200 ease-out",
-                                        { format!("{}{}", t!("pheroblend"), t!("products")) }
-                                    }
-                                    */
                                 }
                             },
                             // About Us dropdown
@@ -406,60 +400,25 @@ pub fn Header() -> Element {
                                         }
                                     }
                                 }
-                            },
-                            // Peptide Calculator link (no dropdown)
-                            /*
-                            Link {
-                                to: Route::PeptideCalculator {},
-                                class: "h-full",
-                                button {
-                                    class: "relative text-nowrap h-full flex items-center transition-all ease-out duration-200 hover:text-ui-fg-base",
-                                    title: t!("peptide-calculator-info"),
-                                    { t!("peptide-calculator") }
-                                }
                             }
-                            */
                         }
                     },
-                    // Center section: Logo
+                    // Center section: Logo (mobile only)
                     div {
-                        class: "flex items-center h-full",
+                        class: "flex md:hidden items-center h-full absolute left-1/2 transform -translate-x-1/2",
                         Link {
                             to: Route::Home {},
                             class: "pl-2 fadeyy",
-                            if is_ind_day {
-                                img {
-                                    src: asset!("/assets/images/header-4th.avif"),
-                                    alt: t!("brand").to_uppercase(),
-                                    title: t!("independence-day"),
-                                    class: "h-8 md:h-12"
-                                }
-                            } else if is_christmas {
-                                img {
-                                    src: asset!("/assets/images/header-christmas.avif"),
-                                    alt: t!("brand").to_uppercase(),
-                                    title: t!("merry-christmas"),
-                                    class: "h-8 md:h-12"
-                                }
-                            } else if is_new_year {
-                                img {
-                                    src: asset!("/assets/images/header.avif"),
-                                    alt: t!("brand").to_uppercase(),
-                                    title: t!("new-year"),
-                                    class: "h-10 md:h-11 lg:h-12"
-                                }
-                            } else {
-                                img {
-                                    src: asset!("/assets/images/header.avif"),
-                                    alt: t!("brand").to_uppercase(),
-                                    class: "h-10 md:h-11 lg:h-12"
-                                }
+                            img {
+                                src: asset!("/assets/images/header.avif"),
+                                alt: t!("brand").to_uppercase(),
+                                class: "h-8"
                             }
                         }
                     },
-                    // Right section: Account, Cart
+                    // Right section: Account, Search, Cart icons
                     div {
-                        class: "flex items-center gap-x-6 h-full flex-1 basis-0 justify-end",
+                        class: "flex items-center gap-x-6 h-full",
                         // Account button (desktop only)
                         div {
                             class: "md:block hidden h-full z-8",
@@ -491,34 +450,6 @@ pub fn Header() -> Element {
                                 }
                             }
                         },
-
-
-                        // Account button (desktop only)
-
-                        /*
-                        div {
-                            class: "md:block hidden h-full z-8",
-                            div {
-                                class: "relative h-full",
-                                a {
-                                    href: "/admin/dashboard",
-                                    title: format!("{}/{}", { t!("account") }, { t!("dashboard") }),
-                                    button {
-                                        class: "h-full",
-                                        aria_label: "Dashboard",
-                                        div {
-                                            class: "flex justify-center",
-                                            img {
-                                                class: "fadey",
-                                                src: asset!("/assets/icons/person-circle-outline.svg"),
-                                                style: "height:27px;"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        */
                         // Cart button
                         div {
                             class: "h-full z-8",
@@ -771,18 +702,7 @@ pub fn Header() -> Element {
                                             }
                                         }
                                     }
-                                },
-                                // Peptide Calculator link
-                                /*
-                                li {
-                                    Link {
-                                        to: Route::PeptideCalculator {},
-                                        onclick: move |_| open_menu.set(false),
-                                        class: "block py-3 px-4 text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-100",
-                                        { t!("peptide-calculator") }
-                                    }
                                 }
-                                */
                             }
                         }
 

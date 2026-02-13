@@ -59,19 +59,6 @@ pub fn Contact() -> Element {
 
                 p {
                     class: "text-ui-fg-subtle mt-2",
-                    {t!("contact-twitter-prefix")}
-                    " "
-                    a {
-                        class: "a",
-                        href: "https://twitter.com/PenchantBio",
-                        target: "_blank",
-                        {t!("twitter-x")}
-                    }
-                    {t!("contact-twitter-suffix")}
-                }
-
-                p {
-                    class: "text-ui-fg-subtle mt-2",
                     {t!("response-time-info")}
                 }
 

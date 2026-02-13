@@ -58,7 +58,7 @@ email-copied = Email copied to clipboard!
 contact-twitter-prefix = You can also contact us on
 twitter-x = Twitter (X)
 contact-twitter-suffix = .
-response-time-info = We normally respond to emails within 12 hours but on infrequent occasions we may take over 24 hours. Please check your spam folder if you have not received any response from us.
+response-time-info = Please check your spam folder if you have not received any response from us.
 check-faq-prefix = Make sure to check our
 check-faq-suffix = if you haven't already as it may have answers you are looking for.
 

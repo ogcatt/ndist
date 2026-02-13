@@ -85,15 +85,15 @@ impl EmailType {
     pub fn template_id(&self) -> u32 {
         match self {
             EmailType::SendOtp { .. } => 5,
-            EmailType::OrderConfirmation { .. } => 4,
-            EmailType::OrderConfirmationWithBackorder { .. } => 13,
-            EmailType::TrackingConfirmation { .. } => 5,
-            EmailType::PreOrderTrackingConfirmation { .. } => 10,
-            EmailType::ExpressDispatchConfirmation { .. } => 6,
-            EmailType::ExpressPreOrderDispatchConfirmation { .. } => 12,
-            EmailType::ExpressTrackingConfirmation { .. } => 9,
-            EmailType::ExpressPreOrderTrackingConfirmation { .. } => 11,
-            EmailType::ExpiredOrder => 7,
+            EmailType::OrderConfirmation { .. } => 6,
+            EmailType::OrderConfirmationWithBackorder { .. } => 14,
+            EmailType::TrackingConfirmation { .. } => 7,
+            EmailType::PreOrderTrackingConfirmation { .. } => 11,
+            EmailType::ExpressDispatchConfirmation { .. } => 8,
+            EmailType::ExpressPreOrderDispatchConfirmation { .. } => 13,
+            EmailType::ExpressTrackingConfirmation { .. } => 10,
+            EmailType::ExpressPreOrderTrackingConfirmation { .. } => 12,
+            EmailType::ExpiredOrder => 9,
         }
     }
 

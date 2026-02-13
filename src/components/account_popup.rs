@@ -27,7 +27,7 @@ static SESSION_STORAGE: Lazy<Mutex<Option<SessionState>>> = Lazy::new(|| Mutex::
 static POPUP_OPEN: AtomicBool = AtomicBool::new(false);
 
 // Hook to get session state - safe for SSR and hydration
-fn use_global_session_state() -> SessionState {
+pub fn use_global_session_state() -> SessionState {
     SESSION_STORAGE.lock().unwrap().clone().unwrap_or_default()
 }
 
