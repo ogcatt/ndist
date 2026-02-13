@@ -15,6 +15,7 @@ pub struct SessionState {
     pub email: String,
     pub name: String,
     pub admin: bool,
+    pub group_ids: Vec<String>,
 }
 
 // Global storage for session state (use Rc<RefCell<...>> for interior mutability)
@@ -58,6 +59,7 @@ pub fn AccountPopupProvider(children: Element) -> Element {
         email: String::new(),
         name: String::new(),
         admin: false,
+        group_ids: Vec::new(),
     });
 
     // Check session on mount
@@ -70,6 +72,7 @@ pub fn AccountPopupProvider(children: Element) -> Element {
                         email: session.email,
                         name: session.name,
                         admin: session.admin,
+                        group_ids: session.group_ids,
                     };
                     session_state.set(state.clone());
                     set_global_session_state(state);
@@ -80,6 +83,7 @@ pub fn AccountPopupProvider(children: Element) -> Element {
                         email: String::new(),
                         name: String::new(),
                         admin: false,
+                        group_ids: Vec::new(),
                     };
                     session_state.set(state.clone());
                     set_global_session_state(state);
