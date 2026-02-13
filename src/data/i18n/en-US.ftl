@@ -537,3 +537,5 @@ track-your-package = Track your package
 no-image = No Image
 pre-orders = Pre-Order Products
 no-shipping-options = No Shipping Options (Too many items?)
+groups = Groups
+my-groups = My Groups

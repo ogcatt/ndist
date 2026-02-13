@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use crate::backend::server_functions::{self, get_or_create_basket, get_products};
-use crate::backend::cache::use_hybrid_cache;
+use crate::backend::cache::{use_hybrid_cache, use_stale_while_revalidate};
 use crate::utils::{GLOBAL_CART, countries::*, filter_products};
 
 use crate::components::{AccountButton, AccountMobileButton, AccountPopupProvider, SearchResults};
@@ -41,11 +41,10 @@ pub fn Header() -> Element {
     let has_groups = session_info
         .read()
         .as_ref()
-        .and_then(|r| r.as_ref().ok())
         .map(|info| !info.group_ids.is_empty())
         .unwrap_or(false);
 
-    let groups_data = use_hybrid_cache(
+    let groups_data = use_stale_while_revalidate(
         "get_user_groups",
         || async { server_functions::get_user_groups().await },
         Duration::from_secs(180),
@@ -303,12 +302,17 @@ pub fn Header() -> Element {
                                     },
                                     div {
                                         class: "absolute w-max min-w-[250px] bg-white rounded-b-md shadow-lg z-10 hidden group-hover:block border border-gray-200 border-t-0",
-                                        if let Some(Ok(groups)) = groups_data.read().as_ref() {
-                                            if let Some(Ok(session)) = session_info.read().as_ref() {
-                                                // Filter groups to only show those the user is a member of
-                                                {
+                                        {
+                                            // Clone data to avoid holding borrows across closures
+                                            let groups_opt = groups_data.read().clone();
+                                            let session_opt = session_info.read().clone();
+                                            
+                                            if let Some(groups) = groups_opt {
+                                                if let Some(session) = session_opt {
+                                                    // Filter groups to only show those the user is a member of
                                                     let user_groups: Vec<_> = groups.iter()
                                                         .filter(|g| session.group_ids.contains(&g.id))
+                                                        .cloned()
                                                         .collect();
 
                                                     rsx! {
@@ -337,14 +341,18 @@ pub fn Header() -> Element {
                                                                 },
                                                                 // Nested dropdown for products in this group
                                                                 if hovered_group_id.read().as_ref() == Some(&group.id) {
-                                                                    if let Some(Ok(products)) = all_products_data.read().as_ref() {
-                                                                        {
+                                                                    {
+                                                                        // Clone products to avoid holding borrow
+                                                                        let products_opt = all_products_data.read().clone();
+                                                                        if let Some(products) = products_opt {
+                                                                            let group_id = group.id.clone();
                                                                             let group_products: Vec<_> = products.iter()
                                                                                 .filter(|p| {
                                                                                     p.access_groups.as_ref()
-                                                                                        .map(|groups| groups.contains(&group.id))
+                                                                                        .map(|groups| groups.contains(&group_id))
                                                                                         .unwrap_or(false)
                                                                                 })
+                                                                                .cloned()
                                                                                 .collect();
 
                                                                             if !group_products.is_empty() {
@@ -380,15 +388,21 @@ pub fn Header() -> Element {
                                                                                     }
                                                                                 }
                                                                             } else {
-                                                                                None
+                                                                                rsx! { }
                                                                             }
+                                                                        } else {
+                                                                            rsx! { }
                                                                         }
                                                                     }
                                                                 }
                                                             }
                                                         }
                                                     }
+                                                } else {
+                                                    rsx! { }
                                                 }
+                                            } else {
+                                                rsx! { }
                                             }
                                         }
                                     }
@@ -751,8 +765,8 @@ pub fn Header() -> Element {
                                         if *mobile_groups_open.read() {
                                             div {
                                                 class: "bg-gray-50 border-b border-gray-100",
-                                                if let Some(Ok(groups)) = groups_data.read().as_ref() {
-                                                    if let Some(Ok(session)) = session_info.read().as_ref() {
+                                                if let Some(groups) = groups_data.read().as_ref() {
+                                                    if let Some(session) = session_info.read().as_ref() {
                                                         {
                                                             let user_groups: Vec<_> = groups.iter()
                                                                 .filter(|g| session.group_ids.contains(&g.id))

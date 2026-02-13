@@ -5,6 +5,8 @@ use crate::backend::front_entities::*;
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 use crate::backend::server_functions::get_session_info;
+use crate::backend::cache::use_stale_while_revalidate;
+use std::time::Duration;
 
 use crate::components::SmilesViewer;
 
@@ -63,15 +65,18 @@ pub fn ProductCard(
     // Check if product is gated (has access_groups)
     let is_gated = product.access_groups.as_ref().map_or(false, |groups| !groups.is_empty());
 
-    let mut session_resource = use_resource(move || async move {
-        get_session_info().await
-    });
+    // Use cached session info for faster access checks
+    let session_signal = use_stale_while_revalidate(
+        "session_info",
+        || async { get_session_info().await },
+        Duration::from_secs(60),
+    );
 
-    let session_state = session_resource.read();
+    let session_state = session_signal.read();
 
     // Check if user has access based on session group membership
     let user_has_access = if is_gated {
-        if let Some(Ok(session)) = session_state.as_ref() {
+        if let Some(session) = session_state.as_ref() {
             // User has access if any of their group IDs match the product's access groups
             product.access_groups
                 .as_ref()
@@ -79,7 +84,7 @@ pub fn ProductCard(
                     session.group_ids.iter().any(|group_id| access_groups.contains(group_id))
                 })
         } else {
-            // No session or session error - no access to gated product
+            // No session - no access to gated product
             false
         }
     } else {
@@ -455,15 +460,18 @@ pub fn WideProductCard(
     // Check if product is gated (has access_groups)
     let is_gated = product.access_groups.as_ref().map_or(false, |groups| !groups.is_empty());
 
-    let mut session_resource = use_resource(move || async move {
-        get_session_info().await
-    });
+    // Use cached session info for faster access checks
+    let session_signal = use_stale_while_revalidate(
+        "session_info",
+        || async { get_session_info().await },
+        Duration::from_secs(60),
+    );
 
-    let session_state = session_resource.read();
+    let session_state = session_signal.read();
 
     // Check if user has access based on session group membership
     let user_has_access = if is_gated {
-        if let Some(Ok(session)) = session_state.as_ref() {
+        if let Some(session) = session_state.as_ref() {
             // User has access if any of their group IDs match the product's access groups
             product.access_groups
                 .as_ref()
@@ -471,7 +479,7 @@ pub fn WideProductCard(
                     session.group_ids.iter().any(|group_id| access_groups.contains(group_id))
                 })
         } else {
-            // No session or session error - no access to gated product
+            // No session - no access to gated product
             false
         }
     } else {
