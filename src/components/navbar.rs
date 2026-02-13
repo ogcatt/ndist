@@ -30,8 +30,8 @@ pub fn Header() -> Element {
     // Track which group is being hovered for the nested dropdown
     let mut hovered_group_id = use_signal(|| None::<String>);
 
-    // Get session info using hybrid cache
-    let session_info = use_hybrid_cache(
+    // Get session info using cache
+    let session_info = use_stale_while_revalidate(
         "get_session_info",
         || async { server_functions::get_session_info().await },
         Duration::from_secs(60),
@@ -306,7 +306,7 @@ pub fn Header() -> Element {
                                             // Clone data to avoid holding borrows across closures
                                             let groups_opt = groups_data.read().clone();
                                             let session_opt = session_info.read().clone();
-                                            
+
                                             if let Some(groups) = groups_opt {
                                                 if let Some(session) = session_opt {
                                                     // Filter groups to only show those the user is a member of

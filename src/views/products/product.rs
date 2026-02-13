@@ -102,21 +102,59 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
     use_effect(move || {
         if let Some(product) = product_signal.read().as_ref() {
             update_product_data(product.clone());
-        } else if product_signal.read().is_none() {
-            // Only set not found if signal is None (not just unset)
-            // We need to check if we've actually tried to load
         }
     });
 
-    // 4b. Track if product was not found after fetch attempt
-    let mut fetch_attempted = use_signal(|| false);
+    // 4b. Track loading state and not found
+    let mut loading = use_signal(|| true);
     use_effect(move || {
+        // Subscribe to product_signal changes
         let product_opt = product_signal.read();
+        
         if product_opt.is_some() {
+            // Got a product - not loading, not "not found"
+            loading.set(false);
             product_not_found.set(false);
-            fetch_attempted.set(true);
         }
-        // If signal is still None after a delay, mark as not found
+        // If None, we don't know yet if it's initial load or actual not found
+    });
+    
+    // Use a timeout to determine when loading is "done"
+    // When the product page first loads, we wait a bit then check
+    let mut checked_not_found = use_signal(|| false);
+    use_effect(move || {
+        // Delay the check to allow fetch to complete
+        let checked = *checked_not_found.read();
+        if !checked && *loading.read() {
+            // Small delay then check if still loading (means no product came through)
+            // This is a simple heuristic
+        }
+    });
+    
+    // Simpler: After a short delay, if still no product, show not found
+    // We'll use a deferred check
+    let mut has_checked = use_signal(|| false);
+    use_effect(move || {
+        // This runs once on mount
+        let checked = *has_checked.read();
+        if !checked {
+            has_checked.set(true);
+            let mut product_signal = product_signal.clone();
+            let mut product_not_found = product_not_found.clone();
+            let mut loading = loading.clone();
+            
+            spawn(async move {
+                // Wait for the async fetch to complete using gloo timer (web compatible)
+                gloo_timers::future::sleep(std::time::Duration::from_millis(500)).await;
+                
+                // Check if we got a product
+                if product_signal.read().is_none() {
+                    // After delay, still no product - it's not found (or no access)
+                    product_not_found.set(true);
+                }
+                loading.set(false);
+            });
+        }
     });
 
     // 5. Optionally fetch all public products for related products (in background)

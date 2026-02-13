@@ -1123,13 +1123,56 @@ where
                     }
 
                     // Step 2: If no individual cache, try to find in products list cache
+                    // BUT: We need to check if the current user has access to this product.
+                    // The cached product might be a stripped preview that shouldn't be shown
+                    // on the product page if the user doesn't have access.
                     #[cfg(feature = "web")]
                     if !has_data {
-                        if let Some(products) = get_any_cached_data::<Vec<Product>>(&products_cache_key) {
-                            if let Some(product) = products.iter().find(|p| p.handle == handle) {
-                                tracing::info!("Found product in products list cache: {}", handle);
-                                product_signal.set(Some(product.clone()));
-                                has_data = true;
+                        // Get session info to check user's groups
+                        if let Some(session_info) = crate::backend::server_functions::get_session_info().await.ok() {
+                            if let Some(products) = get_any_cached_data::<Vec<Product>>(&products_cache_key) {
+                                if let Some(product) = products.iter().find(|p| p.handle == handle) {
+                                    // Check if product has restricted access
+                                    if let Some(ref access_groups) = product.access_groups {
+                                        if !access_groups.is_empty() {
+                                            // Product has access restrictions - check if user is in any of these groups
+                                            let user_group_set: std::collections::HashSet<&String> = session_info.group_ids.iter().collect();
+                                            let has_access = access_groups.iter().any(|ag| user_group_set.contains(ag));
+                                            
+                                            if !has_access && !session_info.admin {
+                                                // User doesn't have access - don't use cached data
+                                                tracing::info!("User doesn't have access to cached product, skipping: {}", handle);
+                                            } else {
+                                                // User has access - use cached data
+                                                tracing::info!("Found product in products list cache with access: {}", handle);
+                                                product_signal.set(Some(product.clone()));
+                                                has_data = true;
+                                            }
+                                        } else {
+                                            // No access groups or empty - product is public, use cached data
+                                            tracing::info!("Found product in products list cache (public): {}", handle);
+                                            product_signal.set(Some(product.clone()));
+                                            has_data = true;
+                                        }
+                                    } else {
+                                        // No access_groups - product is public, use cached data
+                                        tracing::info!("Found product in products list cache (no restrictions): {}", handle);
+                                        product_signal.set(Some(product.clone()));
+                                        has_data = true;
+                                    }
+                                }
+                            }
+                        } else {
+                            // Not logged in - try to use cached data but only if product has no restrictions
+                            if let Some(products) = get_any_cached_data::<Vec<Product>>(&products_cache_key) {
+                                if let Some(product) = products.iter().find(|p| p.handle == handle) {
+                                    // If product has access_groups, don't use cached data for non-logged-in users
+                                    if product.access_groups.is_none() || product.access_groups.as_ref().map(|g| g.is_empty()).unwrap_or(true) {
+                                        tracing::info!("Found product in products list cache (public, no session): {}", handle);
+                                        product_signal.set(Some(product.clone()));
+                                        has_data = true;
+                                    }
+                                }
                             }
                         }
                     }
@@ -1145,11 +1188,11 @@ where
                             store_cached_data(&product_cache_key, &fresh_product, duration_ms);
                         }
                         Ok(None) => {
-                            // Product not found - this is valid for unlisted products that don't exist
-                            tracing::info!("Product not found: {}", handle);
-                            if !has_data {
-                                product_signal.set(None);
-                            }
+                            // Product not found OR user doesn't have access
+                            // Always set to None - this ensures cached restricted products
+                            // are properly replaced with "not found" state
+                            tracing::info!("Product not found or access denied: {}", handle);
+                            product_signal.set(None);
                         }
                         Err(e) => {
                             tracing::error!("Failed to fetch product {}: {:?}", handle, e);
