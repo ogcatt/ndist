@@ -23,6 +23,7 @@ faq = FAQ
 frequently-asked-questions = Frequently Asked Questions
 account = Account
 dashboard = Dashboard
+admin-panel = Admin Panel
 your-location = Your Location
 set-to-currency = Set to Currency
 cart = Cart

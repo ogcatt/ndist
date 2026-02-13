@@ -1,9 +1,11 @@
 use dioxus::prelude::*;
+use crate::t;
 use crate::components::account_popup::{use_global_session_state, SessionState};
 use crate::Route;
 use crate::backend::cache::{use_hybrid_cache, use_stale_while_revalidate};
 use crate::backend::server_functions;
 use crate::backend::server_functions::groups::UserGroupInfo;
+use crate::backend::server_functions::get_session_info;
 use crate::backend::front_entities::Product;
 use std::time::Duration;
 
@@ -16,10 +18,49 @@ enum DashboardPage {
 
 #[component]
 pub fn UserDashboard() -> Element {
-    // Use cached session state instead of making a server request
-    let session = use_global_session_state();
-
     let mut current_page = use_signal(|| DashboardPage::Overview);
+    let mut is_loading = use_signal(|| true);
+
+    // Fetch session info without cache to avoid race condition
+    let mut session_resource = use_resource(move || async move {
+        get_session_info().await
+    });
+
+    // Track the current session state
+    let mut current_session = use_signal(|| SessionState {
+        authenticated: false,
+        email: String::new(),
+        name: String::new(),
+        admin: false,
+        group_ids: Vec::new(),
+    });
+
+    // Update session when resource loads
+    use_effect(move || {
+        if let Some(Ok(info)) = session_resource.read().as_ref() {
+            let state = SessionState {
+                authenticated: info.authenticated,
+                email: info.email.clone(),
+                name: info.name.clone(),
+                admin: info.admin,
+                group_ids: info.group_ids.clone(),
+            };
+            current_session.set(state);
+            is_loading.set(false);
+
+            // Only redirect if we've confirmed they're not authenticated
+            if !info.authenticated {
+                spawn(async move {
+                    // Small delay to avoid race condition
+                    gloo_timers::future::TimeoutFuture::new(100).await;
+                    let _ = web_sys::window()
+                        .unwrap()
+                        .location()
+                        .set_href("/");
+                });
+            }
+        }
+    });
 
     // Get groups data using hybrid cache
     let groups_data = use_stale_while_revalidate(
@@ -35,24 +76,27 @@ pub fn UserDashboard() -> Element {
         Duration::from_secs(180),
     );
 
-    // Redirect to home if not authenticated
-    if !session.authenticated {
-        use_effect(move || {
-            let _ = web_sys::window()
-                .unwrap()
-                .location()
-                .set_href("/");
-        });
+    // Show loading state while checking authentication
+    if *is_loading.read() {
+        return rsx! {
+            div { class: "min-h-screen bg-gray-50 flex items-center justify-center",
+                div { class: "text-center",
+                    p { class: "text-gray-600", "Loading..." }
+                }
+            }
+        };
     }
+
+    let session = current_session.read().clone();
 
     rsx! {
         div { class: "min-h-screen bg-gray-50",
             // Desktop layout with sidebar
-            div { class: "hidden md:flex",
-                // Sidebar
-                div { class: "w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col",
-                    // Navigation items
-                    div { class: "flex-1 pt-8",
+            div { class: "hidden md:flex min-h-screen",
+                // Sidebar - fixed position
+                div { class: "w-64 bg-white border-r border-gray-200 flex flex-col fixed h-screen",
+                    // Navigation items - scrollable area
+                    div { class: "flex-1 pt-8 overflow-y-auto",
                         nav { class: "space-y-1",
                             // Overview
                             button {
@@ -89,20 +133,26 @@ pub fn UserDashboard() -> Element {
                         }
                     }
 
-                    // Admin Panel link (sticky to bottom)
+                    // Admin Panel link (sticky to bottom) - non-scrollable
                     if session.admin {
-                        div { class: "border-t border-gray-200 p-4",
-                            Link {
-                                to: Route::AdminDashboard {},
-                                class: "flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors",
-                                "Admin Panel"
+                        div { class: "border-t border-gray-200 p-4 flex-shrink-0",
+                            a {
+                                href: "/admin/dashboard",
+                                target: "_blank",
+                                class: "flex justify-center mt-[-110px] pr-0.5 items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors",
+                                { t!("admin-panel") }
+                                img {
+                                    class: "ml-2 self-center brightness-0 invert",
+                                    src: asset!("/assets/icons/open-outline.svg"),
+                                    style: "height:16px;"
+                                }
                             }
                         }
                     }
                 }
 
-                // Main content area
-                div { class: "flex-1 py-8 px-6 overflow-y-auto",
+                // Main content area - with left margin to account for fixed sidebar
+                div { class: "flex-1 ml-64 py-16 px-6 overflow-y-auto",
                     match *current_page.read() {
                         DashboardPage::Overview => rsx! {
                             OverviewPage { session: session.clone(), groups_data: groups_data.clone(), all_products_data: all_products_data.clone() }
@@ -123,10 +173,16 @@ pub fn UserDashboard() -> Element {
                     // Admin link for mobile
                     if session.admin {
                         div { class: "mb-4",
-                            Link {
-                                to: Route::AdminDashboard {},
-                                class: "text-blue-600 hover:text-blue-800 text-sm font-medium",
-                                "Visit Admin Dashboard →"
+                            a {
+                                href: "/admin/dashboard",
+                                target: "_blank",
+                                class: "flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium",
+                                { t!("admin-panel") }
+                                img {
+                                    class: "ml-1.5 self-center",
+                                    src: asset!("/assets/icons/open-outline.svg"),
+                                    style: "height:16px; filter: brightness(0) saturate(100%) invert(38%) sepia(94%) saturate(1965%) hue-rotate(202deg) brightness(95%) contrast(101%);"
+                                }
                             }
                         }
                     }
@@ -202,7 +258,7 @@ fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupI
                                         "Admin"
                                     }
                                     dd { class: "mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2",
-                                        "true"
+                                        "True"
                                     }
                                 }
                             }
@@ -264,7 +320,13 @@ fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupI
                                                                             }
                                                                         }
                                                                         p { class: "mt-2 text-xs text-gray-500",
-                                                                            "Provides access to {product_count} products."
+                                                                            {
+                                                                                if product_count == 1 {
+                                                                                    "Provides access to 1 product.".to_string()
+                                                                                } else {
+                                                                                    format!("Provides access to {} products.", product_count)
+                                                                                }
+                                                                            }
                                                                         }
                                                                     }
                                                                     div { class: "ml-4",
