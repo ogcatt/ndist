@@ -439,9 +439,15 @@ fn use_session_state() -> SessionState {
 
 #[component]
 pub fn AccountButton() -> Element {
-    let mut session_resource = use_resource(move || async move {
-        get_session_info().await
-    });
+    use crate::backend::cache::use_stale_while_revalidate;
+    use std::time::Duration;
+
+    // Use cached session info for faster access checks (avoid race condition on page refresh)
+    let session_signal = use_stale_while_revalidate(
+        "session_info",
+        || async { get_session_info().await },
+        Duration::from_secs(60),
+    );
 
     let Some(mut account_popup_open) = use_account_popup() else {
         // Return placeholder button when no context available
@@ -461,10 +467,10 @@ pub fn AccountButton() -> Element {
         };
     };
 
-    let session_state = session_resource.read();
+    let session_state = session_signal.read();
     let is_authenticated = session_state
         .as_ref()
-        .map(|s| s.as_ref().map(|session| session.authenticated).unwrap_or(false))
+        .map(|s| s.authenticated)
         .unwrap_or(false);
 
     if is_authenticated {
@@ -509,9 +515,15 @@ pub fn AccountButton() -> Element {
 
 #[component]
 pub fn AccountMobileButton() -> Element {
-    let mut session_resource = use_resource(move || async move {
-        get_session_info().await
-    });
+    use crate::backend::cache::use_stale_while_revalidate;
+    use std::time::Duration;
+
+    // Use cached session info for faster access checks (avoid race condition on page refresh)
+    let session_signal = use_stale_while_revalidate(
+        "session_info",
+        || async { get_session_info().await },
+        Duration::from_secs(60),
+    );
 
     let Some(mut account_popup_open) = use_account_popup() else {
         // Return placeholder link when no context available
@@ -532,10 +544,10 @@ pub fn AccountMobileButton() -> Element {
         };
     };
 
-    let session_state = session_resource.read();
+    let session_state = session_signal.read();
     let is_authenticated = session_state
         .as_ref()
-        .map(|s| s.as_ref().map(|session| session.authenticated).unwrap_or(false))
+        .map(|s| s.authenticated)
         .unwrap_or(false);
 
     if is_authenticated {

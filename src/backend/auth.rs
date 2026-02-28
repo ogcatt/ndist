@@ -286,6 +286,7 @@ pub async fn auth_middleware(
 
     // Check if this is an admin route - if so, read from DB directly (no cache)
     // This ensures admin status changes are reflected immediately
+    // This covers server functions prefixed with admin, which at run time may be like /api/admin_get_orders2331231805942226593
     let is_admin_route = path.starts_with("/admin") || path.starts_with("/api/admin");
 
     if let Some(session_token) = cookies.get("session_token") {
