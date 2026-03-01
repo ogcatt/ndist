@@ -53,7 +53,7 @@ pub fn AdminStockItem(props: AdminStockItemProps) -> Element {
 
     let mut current_stock_item = use_signal(|| None::<StockItem>);
     let mut stock_item_not_found = use_signal(|| false);
-    let mut loading = use_signal(|| !is_edit_mode);
+    let mut loading = use_signal(|| is_edit_mode);
 
     // Basic stock item info
     let mut name = use_signal(|| String::new());

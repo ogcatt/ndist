@@ -609,6 +609,31 @@ pub fn Header() -> Element {
                                 }
                             }
                         },
+                        // Admin button (desktop only, admin users only)
+                        if session_info.read().as_ref().map(|info| info.admin).unwrap_or(false) {
+                            div {
+                                class: "md:block hidden h-full z-8",
+                                div {
+                                    class: "relative h-full",
+                                    Link {
+                                        to: Route::AdminDashboard {},
+                                        title: "Admin Dashboard",
+                                        button {
+                                            class: "h-full",
+                                            aria_label: "Admin Dashboard",
+                                            div {
+                                                class: "flex justify-center",
+                                                img {
+                                                    class: "fadey",
+                                                    src: asset!("/assets/icons/receipt-outline.svg"),
+                                                    style: "height:27px;"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         // Cart button
                         div {
                             class: "h-full z-8",
@@ -923,6 +948,20 @@ pub fn Header() -> Element {
                         // Bottom section - Account
                         div {
                             class: "border-t-2 border-gray-200 bg-gray-50 flex-shrink-0",
+                            // Admin link (mobile only, admin users only)
+                            if session_info.read().as_ref().map(|info| info.admin).unwrap_or(false) {
+                                Link {
+                                    to: Route::AdminDashboard {},
+                                    onclick: move |_| open_menu.set(false),
+                                    class: "flex items-center py-3 px-4 text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
+                                    img {
+                                        class: "blende mr-3",
+                                        src: asset!("/assets/icons/receipt.svg"),
+                                        style: "height:20px;"
+                                    },
+                                    "Admin"
+                                }
+                            }
                             AccountMobileButton {}
                         }
                     }

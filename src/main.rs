@@ -325,6 +325,30 @@ fn App() -> Element {
         document::eval(&script_code);
     });
 
+    // Initialize Chart.js library once for the entire app
+    use_effect(move || {
+        const CHARTJS_ASSET: Asset = asset!(
+            "/assets/chart.min.js",
+            JsAssetOptions::new().with_minify(false)
+        );
+
+        let script_code = format!(
+            r#"
+            if (!window.chartJsLoaded) {{
+                const script = document.createElement('script');
+                script.src = '{}';
+                script.onload = function() {{
+                    console.log('Chart.js loaded globally');
+                    window.chartJsLoaded = true;
+                }};
+                document.head.appendChild(script);
+            }}
+            "#,
+            CHARTJS_ASSET
+        );
+        document::eval(&script_code);
+    });
+
     rsx! {
         // Head links
         document::Link { rel: "icon", href: FAVICON }

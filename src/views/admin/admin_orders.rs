@@ -1378,17 +1378,17 @@ pub fn AdminOrders() -> Element {
 
             // Stats bar
             div {
-                class: "bg-white border rounded-md border-gray-200 p-4 mb-4 h-20 flex items-center justify-between",
+                class: "bg-white border rounded-md border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-center justify-between",
 
                 // Time selector
                 div {
-                    class: "flex items-center gap-2",
+                    class: "flex flex-wrap items-center gap-2",
                     span {
-                        class: "text-sm text-gray-600 mr-2",
-                        "{selected_timespan.read().days()} days"
+                        class: "text-sm text-gray-600",
+                        "{selected_timespan.read().days()}d"
                     }
                     div {
-                        class: "flex gap-1",
+                        class: "flex flex-wrap gap-1",
                         for timespan in [TimeSpan::Days7, TimeSpan::Days30, TimeSpan::Days60, TimeSpan::Days90, TimeSpan::Days180, TimeSpan::Days360] {
                             button {
                                 class: if *selected_timespan.read() == timespan {
@@ -1411,61 +1411,37 @@ pub fn AdminOrders() -> Element {
 
                         rsx! {
                             div {
-                                class: "flex gap-8",
+                                class: "flex flex-wrap gap-4",
 
                                 div {
                                     class: "text-center",
-                                    div {
-                                        class: "text-xs text-gray-500 uppercase tracking-wide",
-                                        "Orders"
-                                    }
-                                    div {
-                                        class: "text-xl font-semibold",
-                                        "{total_orders}"
-                                    }
+                                    div { class: "text-xs text-gray-500 uppercase tracking-wide", "Orders" }
+                                    div { class: "text-xl font-semibold", "{total_orders}" }
                                 }
 
                                 div {
                                     class: "text-center",
-                                    div {
-                                        class: "text-xs text-gray-500 uppercase tracking-wide",
-                                        "Ordered Items"
-                                    }
-                                    div {
-                                        class: "text-xl font-semibold",
-                                        "{total_items}"
-                                    }
+                                    div { class: "text-xs text-gray-500 uppercase tracking-wide", "Items" }
+                                    div { class: "text-xl font-semibold", "{total_items}" }
                                 }
 
                                 div {
                                     class: "text-center",
-                                    div {
-                                        class: "text-xs text-gray-500 uppercase tracking-wide",
-                                        "Fulfilled Orders"
-                                    }
-                                    div {
-                                        class: "text-xl font-semibold",
-                                        "{fulfilled_orders}"
-                                    }
+                                    div { class: "text-xs text-gray-500 uppercase tracking-wide", "Fulfilled" }
+                                    div { class: "text-xl font-semibold", "{fulfilled_orders}" }
                                 }
 
                                 div {
                                     class: "text-center",
-                                    div {
-                                        class: "text-xs text-gray-500 uppercase tracking-wide",
-                                        "Time To Fulfill"
-                                    }
-                                    div {
-                                        class: "text-xl font-semibold",
-                                        "{avg_time:.1} days"
-                                    }
+                                    div { class: "text-xs text-gray-500 uppercase tracking-wide", "Avg Time" }
+                                    div { class: "text-xl font-semibold", "{avg_time:.1}d" }
                                 }
                             }
                         }
                     },
                     _ => rsx! {
                         div {
-                            class: "flex gap-8",
+                            class: "flex gap-4",
                             div {
                                 class: "text-center",
                                 div { class: "text-xs text-gray-500 uppercase tracking-wide", "Loading..." }
@@ -1484,13 +1460,13 @@ pub fn AdminOrders() -> Element {
                 div {
                     class: "border-b border-gray-200",
                     div {
-                        class: "flex",
+                        class: "flex overflow-x-auto",
                         for tab in [OrderTab::All, OrderTab::Unfulfilled, OrderTab::PreOrders, OrderTab::Packaged, OrderTab::Fulfilled] {
                             button {
                                 class: if *active_tab.read() == tab {
-                                    "px-4 py-3 text-sm font-medium text-gray-900 border-b-2 border-gray-900"
+                                    "px-4 py-3 text-sm font-medium text-gray-900 border-b-2 border-gray-900 whitespace-nowrap shrink-0"
                                 } else {
-                                    "px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300"
+                                    "px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 whitespace-nowrap shrink-0"
                                 },
                                 onclick: move |_| active_tab.set(tab.clone()),
                                 "{tab}"
@@ -1515,16 +1491,16 @@ pub fn AdminOrders() -> Element {
                     }
                 }
 
-                // Column headers
+                // Column headers (desktop only)
                 div {
-                    class: "grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide",
-                    div { class: "col-span-1", "" } // Checkbox column
+                    class: "hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide",
+                    div { class: "col-span-1", "" }
                     div { class: "col-span-2", "Order" }
                     div { class: "col-span-2", "Date" }
                     div { class: "col-span-2", "Total" }
                     div { class: "col-span-2", "Status" }
                     div { class: "col-span-2", "Items" }
-                    div { class: "col-span-1", "" } // Actions column
+                    div { class: "col-span-1", "" }
                 }
 
                 // Orders list
@@ -1560,15 +1536,15 @@ pub fn AdminOrders() -> Element {
                                                 rsx! {
                                                     for item in preorder_items {
                                                         div {
-                                                            class: "grid grid-cols-12 gap-4 px-4 py-1 hover:bg-gray-50 transition-colors min-h-[40px] items-center",
+                                                            class: "md:grid md:grid-cols-12 md:gap-4 px-4 py-3 md:py-1 hover:bg-gray-50 transition-colors md:min-h-[40px] md:items-center",
 
-                                                            // Checkbox
+                                                            // Checkbox (desktop only)
                                                             div {
-                                                                class: "col-span-1",
+                                                                class: "col-span-1 hidden md:block",
                                                                 input {
                                                                     r#type: "checkbox",
                                                                     class: "rounded border-gray-300 text-gray-900 focus:ring-gray-500",
-                                                                    onclick: |e| e.stop_propagation(), // Prevent modal when clicking checkbox
+                                                                    onclick: |e| e.stop_propagation(),
                                                                 }
                                                             }
 
@@ -1594,9 +1570,9 @@ pub fn AdminOrders() -> Element {
                                                                 }
                                                             }
 
-                                                            // Date
+                                                            // Mobile card row: date + status
                                                             div {
-                                                                class: "col-span-2 text-sm text-gray-900 cursor-pointer",
+                                                                class: "flex md:contents items-center justify-between gap-2 mt-1",
                                                                 onclick: {
                                                                     let order_clone = (*order).clone();
                                                                     let item_clone = (*item).clone();
@@ -1606,65 +1582,29 @@ pub fn AdminOrders() -> Element {
                                                                         show_order_modal.set(true);
                                                                     }
                                                                 },
-                                                                "{format_date(&order.created_at)}"
-                                                            }
-
-                                                            // Empty total column for pre-orders tab
-                                                            div {
-                                                                class: "col-span-2 cursor-pointer",
-                                                                onclick: {
-                                                                    let order_clone = (*order).clone();
-                                                                    let item_clone = (*item).clone();
-                                                                    move |_| {
-                                                                        selected_order.set(Some(order_clone.clone()));
-                                                                        selected_preorder_item.set(Some(item_clone.clone()));
-                                                                        show_order_modal.set(true);
-                                                                    }
-                                                                },
-                                                                span {
-                                                                    class: "text-gray-400 text-sm",
-                                                                    "—"
-                                                                }
-                                                            }
-
-                                                            // Status for pre-order item
-                                                            div {
-                                                                class: "col-span-2 cursor-pointer",
-                                                                onclick: {
-                                                                    let order_clone = (*order).clone();
-                                                                    let item_clone = (*item).clone();
-                                                                    move |_| {
-                                                                        selected_order.set(Some(order_clone.clone()));
-                                                                        selected_preorder_item.set(Some(item_clone.clone()));
-                                                                        show_order_modal.set(true);
-                                                                    }
-                                                                },
+                                                                // Date
+                                                                span { class: "col-span-2 text-sm text-gray-500", "{format_date(&order.created_at)}" }
+                                                                // Status
                                                                 {
                                                                     let status = get_preorder_status(item, &order.preorder_reduces, &order.pre_orders);
                                                                     let status_class = if status == "Unstocked" {
-                                                                        "px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium"
-                                                                    } else if status == "Packaged" {
-                                                                        "px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium"
-                                                                    } else if status == "Fulfilled" {
-                                                                        "px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium"
+                                                                        "col-span-2 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium"
+                                                                    } else if status == "Packaged" || status == "Fulfilled" {
+                                                                        "col-span-2 px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium"
                                                                     } else if status == "Untracked" {
-                                                                        "px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium"
+                                                                        "col-span-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium"
                                                                     } else {
-                                                                        "px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium"
+                                                                        "col-span-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium"
                                                                     };
-
-                                                                    rsx! {
-                                                                        span {
-                                                                            class: "{status_class}",
-                                                                            "{status}"
-                                                                        }
-                                                                    }
+                                                                    rsx! { span { class: "{status_class}", "{status}" } }
                                                                 }
+                                                                // Total placeholder (desktop only)
+                                                                span { class: "col-span-2 hidden md:block text-gray-400 text-sm", "—" }
                                                             }
 
-                                                            // Items column - only the pre-order item name
+                                                            // Items column
                                                             div {
-                                                                class: "col-span-2 text-sm text-gray-900 cursor-pointer",
+                                                                class: "col-span-2 text-sm text-gray-900 cursor-pointer mt-1 md:mt-0",
                                                                 onclick: {
                                                                     let order_clone = (*order).clone();
                                                                     let item_clone = (*item).clone();
@@ -1683,18 +1623,15 @@ pub fn AdminOrders() -> Element {
                                                                 }
                                                             }
 
-                                                            // Edit button
+                                                            // Action button
                                                             div {
-                                                                class: "col-span-1 flex justify-center",
+                                                                class: "col-span-1 hidden md:flex justify-center",
                                                                 a {
                                                                     href: "#",
-                                                                    title: "Edit order",
+                                                                    title: "View order",
                                                                     class: "flex items-center justify-center w-8 h-8 rounded hover:bg-gray-100 transition-colors",
                                                                     onclick: |e| e.prevent_default(),
-                                                                    img {
-                                                                        class: "w-5 h-5",
-                                                                        src: asset!("/assets/icons/create-outline.svg")
-                                                                    }
+                                                                    img { class: "w-5 h-5", src: asset!("/assets/icons/create-outline.svg") }
                                                                 }
                                                             }
                                                         }
@@ -1704,29 +1641,29 @@ pub fn AdminOrders() -> Element {
                                                 // Other tabs: show regular order rows
                                                 rsx! {
                                                     div {
-                                                        class: "grid grid-cols-12 gap-4 px-4 py-1 hover:bg-gray-50 transition-colors min-h-[40px] items-center",
+                                                        class: "md:grid md:grid-cols-12 md:gap-4 px-4 py-3 md:py-1 hover:bg-gray-50 transition-colors md:min-h-[40px] md:items-center cursor-pointer",
+                                                        onclick: {
+                                                            let order_clone = (*order).clone();
+                                                            move |_| {
+                                                                selected_order.set(Some(order_clone.clone()));
+                                                                selected_preorder_item.set(None);
+                                                                show_order_modal.set(true);
+                                                            }
+                                                        },
 
-                                                        // Checkbox
+                                                        // Checkbox (desktop only)
                                                         div {
-                                                            class: "col-span-1",
+                                                            class: "col-span-1 hidden md:block",
                                                             input {
                                                                 r#type: "checkbox",
                                                                 class: "rounded border-gray-300 text-gray-900 focus:ring-gray-500",
-                                                                onclick: |e| e.stop_propagation(), // Prevent modal when clicking checkbox
+                                                                onclick: |e| e.stop_propagation(),
                                                             }
                                                         }
 
-                                                        // Order number
+                                                        // Order number (always visible)
                                                         div {
-                                                            class: "col-span-2 cursor-pointer",
-                                                            onclick: {
-                                                                let order_clone = (*order).clone();
-                                                                move |_| {
-                                                                    selected_order.set(Some(order_clone.clone()));
-                                                                    selected_preorder_item.set(None);
-                                                                    show_order_modal.set(true);
-                                                                }
-                                                            },
+                                                            class: "col-span-2",
                                                             div {
                                                                 class: "font-medium text-gray-900",
                                                                 "#{order.ref_code}"
@@ -1737,63 +1674,37 @@ pub fn AdminOrders() -> Element {
                                                             }
                                                         }
 
-                                                        // Date
+                                                        // Mobile combined row / desktop grid cells: Date + Total + Status
                                                         div {
-                                                            class: "col-span-2 text-sm text-gray-900 cursor-pointer",
-                                                            onclick: {
-                                                                let order_clone = (*order).clone();
-                                                                move |_| {
-                                                                    selected_order.set(Some(order_clone.clone()));
-                                                                    selected_preorder_item.set(None);
-                                                                    show_order_modal.set(true);
-                                                                }
-                                                            },
-                                                            "{format_date(&order.created_at)}"
-                                                        }
-
-                                                        // Total with IPE indicator if contains pre-orders
-                                                        div {
-                                                            class: "col-span-2 font-medium text-gray-900 cursor-pointer",
-                                                            onclick: {
-                                                                let order_clone = (*order).clone();
-                                                                move |_| {
-                                                                    selected_order.set(Some(order_clone.clone()));
-                                                                    selected_preorder_item.set(None);
-                                                                    show_order_modal.set(true);
-                                                                }
-                                                            },
-                                                            {
-                                                                if contains_preorders {
-                                                                    format!("${:.2} (IPE)", order.total_amount_usd)
-                                                                } else {
-                                                                    format!("${:.2}", order.total_amount_usd)
+                                                            class: "flex md:contents flex-wrap items-center gap-2 mt-1 md:mt-0",
+                                                            // Date
+                                                            span { class: "col-span-2 text-sm text-gray-500", "{format_date(&order.created_at)}" }
+                                                            // Total
+                                                            span {
+                                                                class: "col-span-2 font-medium text-gray-900 text-sm",
+                                                                {
+                                                                    if contains_preorders {
+                                                                        format!("${:.2} (IPE)", order.total_amount_usd)
+                                                                    } else {
+                                                                        format!("${:.2}", order.total_amount_usd)
+                                                                    }
                                                                 }
                                                             }
-                                                        }
-
-                                                        // Status
-                                                        div {
-                                                            class: "col-span-2 cursor-pointer",
-                                                            onclick: {
-                                                                let order_clone = (*order).clone();
-                                                                move |_| {
-                                                                    selected_order.set(Some(order_clone.clone()));
-                                                                    selected_preorder_item.set(None);
-                                                                    show_order_modal.set(true);
-                                                                }
-                                                            },
-
-                                                            span {
-                                                                class: "{get_order_status_class(order)}",
-                                                                {
-                                                                    if has_backorders(order) {
-                                                                        "Backordered".to_string()
-                                                                    } else if order.status == OrderStatus::Pending && order.prepared_at.is_some() {
-                                                                        "Prepared".to_string()
-                                                                    } else if order.status == OrderStatus::Fulfilled && order.tracking_url.is_none() {
-                                                                        "Untracked".to_string()
-                                                                    } else {
-                                                                        order.status.to_string()
+                                                            // Status
+                                                            div {
+                                                                class: "col-span-2",
+                                                                span {
+                                                                    class: "{get_order_status_class(order)}",
+                                                                    {
+                                                                        if has_backorders(order) {
+                                                                            "Backordered".to_string()
+                                                                        } else if order.status == OrderStatus::Pending && order.prepared_at.is_some() {
+                                                                            "Prepared".to_string()
+                                                                        } else if order.status == OrderStatus::Fulfilled && order.tracking_url.is_none() {
+                                                                            "Untracked".to_string()
+                                                                        } else {
+                                                                            order.status.to_string()
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -1801,15 +1712,7 @@ pub fn AdminOrders() -> Element {
 
                                                         // Items - exclude pre-order items
                                                         div {
-                                                            class: "col-span-2 text-sm text-gray-900 cursor-pointer",
-                                                            onclick: {
-                                                                let order_clone = (*order).clone();
-                                                                move |_| {
-                                                                    selected_order.set(Some(order_clone.clone()));
-                                                                    selected_preorder_item.set(None);
-                                                                    show_order_modal.set(true);
-                                                                }
-                                                            },
+                                                            class: "col-span-2 text-sm text-gray-900 mt-1 md:mt-0",
                                                             {
                                                                 let non_preorder_items: Vec<&OrderShortItem> = order.items.iter()
                                                                     .filter(|item| !item.pre_order_on_purchase)
@@ -1853,9 +1756,9 @@ pub fn AdminOrders() -> Element {
                                                             }
                                                         }
 
-                                                        // Edit button
+                                                        // Edit button (desktop only)
                                                         div {
-                                                            class: "col-span-1 flex justify-center",
+                                                            class: "col-span-1 hidden md:flex justify-center",
                                                             a {
                                                                 href: "#",
                                                                 title: "Edit order",

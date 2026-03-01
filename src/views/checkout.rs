@@ -83,6 +83,32 @@ pub fn Checkout() -> Element {
     let mut payment_loading = use_signal(|| false);
     let mut payment_error = use_signal(|| None::<String>);
 
+    // Auth check: user must be signed in to access checkout
+    let mut auth_loading = use_signal(|| true);
+    let mut email_locked = use_signal(|| false);
+
+    let session_resource = use_resource(move || async move {
+        server_functions::get_session_info().await
+    });
+
+    use_effect(move || {
+        if let Some(Ok(info)) = session_resource.read().as_ref() {
+            auth_loading.set(false);
+            if !info.authenticated {
+                spawn(async move {
+                    gloo_timers::future::TimeoutFuture::new(100).await;
+                    let _ = web_sys::window()
+                        .unwrap()
+                        .location()
+                        .set_href("/");
+                });
+            } else {
+                email.set(info.email.clone());
+                email_locked.set(true);
+            }
+        }
+    });
+
     // Country list from allowed list helper
     let countries = available_countries_display();
 
@@ -506,6 +532,13 @@ pub fn Checkout() -> Element {
             src: "https://challenges.cloudflare.com/turnstile/v0/api.js"
         }
 
+        if auth_loading() {
+            div { class: "max-w-[1100px] w-full mx-auto px-5 md:px-6 pt-20 flex justify-center",
+                div { class: "text-gray-500 text-base", "Loading..." }
+            }
+        }
+
+        if !auth_loading() {
         div { class: "max-w-[1100px] w-full mx-auto px-5 md:px-6 pt-6 md:pt-10 pb-8 md:pb-16",
             div { class: "lg:flex block",
                 // Left column (63%)
@@ -524,7 +557,12 @@ pub fn Checkout() -> Element {
                                 optional: false,
                                 inside_label: true,
                                 input_type: "email".to_string(),
-                                oninput: move |event: FormEvent| email.set(event.value()),
+                                disabled: email_locked(),
+                                oninput: move |event: FormEvent| {
+                                    if !email_locked() {
+                                        email.set(event.value());
+                                    }
+                                },
                             }
                         }
                         // Phone
@@ -1253,5 +1291,6 @@ pub fn Checkout() -> Element {
                 }
             }
         }
+        } // end if !auth_loading
     }
 }
