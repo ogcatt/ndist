@@ -85,8 +85,8 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
                     }
                 }
                 Err(e) => {
-                    // Don't show notification for loading state
-                    if e.to_string() == "Loading..." {
+                    // Don't show notification for loading state (group_id not yet populated)
+                    if e.to_string().contains("Loading...") || e.to_string().contains("Not in edit mode") {
                         return;
                     }
                     notification_message.set(format!("Error loading group: {}", e));
@@ -352,23 +352,26 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
     };
 
     if is_edit_mode && !loaded() {
-        // Check loading state - avoid showing errors during initial load
         let res = group_resource();
         let res_ref = res.as_ref();
 
-        let is_still_loading = res.is_none()
-            || res_ref.is_some_and(|r| r.as_ref().is_err_and(|e| e.to_string() == "Loading..."));
+        let is_loading_err = res_ref.is_some_and(|r| {
+            r.as_ref().is_err_and(|e| e.to_string().contains("Loading..."))
+        });
 
-        let has_error = res_ref.is_some_and(|r| r.is_err())
-            || res_ref.is_some_and(|r| r.as_ref().is_ok_and(|resp| !resp.success));
+        let is_still_loading = res.is_none() || group_id().is_empty() || is_loading_err;
+
+        let has_real_error = !is_still_loading
+            && (res_ref.is_some_and(|r| r.is_err())
+                || res_ref.is_some_and(|r| r.as_ref().is_ok_and(|resp| !resp.success)));
 
         if is_still_loading {
-            return rsx! { div { "Loading..." } };
+            return rsx! { div { class: "p-6 text-sm text-gray-400", "Loading..." } };
         }
 
-        if has_error {
+        if has_real_error {
             return rsx! {
-                div { class: "text-red-500", "Error loading group." }
+                div { class: "p-6 text-sm text-red-500", "Error loading group." }
             };
         }
     }

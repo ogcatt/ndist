@@ -9,7 +9,7 @@ use crate::backend::server_functions::{
     CreateEditProductRequest, CreateEditProductVariantRequest, UploadResponse,
     admin_create_product, admin_edit_product, admin_upload_thumbnails,
     admin_get_products, admin_get_product_variant_stock_item_relations,
-    admin_get_stock_items,
+    admin_get_stock_items, admin_get_groups,
 };
 use crate::components::*;
 
@@ -77,7 +77,18 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
 
     let mut variants: Signal<Vec<EditProductVariant>> = use_signal(|| vec![]);
     let mut uploading = use_signal(|| false);
+    let mut upload_dots = use_signal(|| 0u8);
     let mut saving = use_signal(|| false);
+
+    // Animate dots while uploading
+    use_coroutine(move |_rx: UnboundedReceiver<()>| async move {
+        loop {
+            gloo_timers::future::TimeoutFuture::new(1000).await;
+            if uploading() {
+                upload_dots.set((upload_dots() + 1) % 3);
+            }
+        }
+    });
 
     let mut force_no_stock = use_signal(|| false);
     let mut purity_standard = use_signal(|| String::from("98.0"));
@@ -88,6 +99,10 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
     let mut brand = use_signal(|| String::new());
     let mut priority = use_signal(|| String::new());
     let mut back_order = use_signal(|| false);
+
+    let mut access_groups: Signal<Vec<String>> = use_signal(|| vec![]);
+    let mut show_private_preview = use_signal(|| false);
+    let mut group_search = use_signal(|| String::new());
 
     let mut physical_description = use_signal(|| String::new());
     let mut plabs_node_id = use_signal(|| String::new());
@@ -136,6 +151,8 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
         admin_get_stock_items().await
     });
 
+    let groups = use_resource(move || async move { admin_get_groups().await });
+
     // Load product data in edit mode
     use_effect(move || {
         if !is_edit_mode {
@@ -170,6 +187,8 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                 brand.set(product.brand.clone().unwrap_or_default());
                 priority.set(product.priority.map(|p| p.to_string()).unwrap_or_default());
                 back_order.set(product.back_order);
+                access_groups.set(product.access_groups.clone().unwrap_or_default());
+                show_private_preview.set(product.show_private_preview);
 
                 physical_description.set(product.physical_description.clone().unwrap_or_default());
                 plabs_node_id.set(product.plabs_node_id.clone().unwrap_or_default());
@@ -470,6 +489,8 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                     priority().parse().ok()
                 },
                 back_order: back_order(),
+                access_groups: access_groups(),
+                show_private_preview: show_private_preview(),
                 physical_description: if physical_description().trim().is_empty() {
                     None
                 } else {
@@ -802,7 +823,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                 div {
                     class: "flex w-full flex-col gap-2",
                     div {
-                        class: "flex-grow bg-white border rounded-md border-gray-200 p-4 min-h-36",
+                        class: "bg-white border rounded-md border-gray-200 p-4",
                         div {
                             class: "flex gap-4 w-full",
 
@@ -845,7 +866,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                 }
                             },
                         }
-                        br {},
+                        div { class: "mt-3" }
                         CTextArea {
                             label: "Short Description (md)",
                             placeholder: "About this product...",
@@ -853,6 +874,136 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                             oninput: move |event: FormEvent| short_description.set(event.value())
                         },
                     },
+
+                    // Access section
+                    div {
+                        class: "bg-white border rounded-md border-gray-200 p-4",
+                        h2 { class: "text-sm font-semibold text-gray-700 mb-3", "Access" }
+                        div {
+                            class: "flex flex-col gap-3",
+
+                            // Visibility
+                            CSelectGroup {
+                                label: "Visibility",
+                                optional: false,
+                                oninput: move |event: FormEvent| {
+                                    if let Ok(vis) = event.value().parse::<ProductVisibility>() {
+                                        visibility.set(vis);
+                                    }
+                                },
+                                for product_vis_type in ProductVisibility::iter() {
+                                    CSelectItem {
+                                        value: "{product_vis_type}",
+                                        selected: product_vis_type == visibility(),
+                                        key: "{product_vis_type:?}",
+                                        "{product_vis_type.to_string()}"
+                                    }
+                                }
+                            }
+
+                            // Access Groups
+                            div {
+                                div { class: "text-xs font-medium text-gray-700 pb-1", "Access Groups" }
+
+                                // Selected chips
+                                if !access_groups.read().is_empty() {
+                                    div {
+                                        class: "flex flex-wrap gap-1 mb-2",
+                                        for group_id in access_groups.read().clone() {
+                                            {
+                                                let groups_ref = groups.read();
+                                                let group_name = if let Some(Ok(gl)) = groups_ref.as_ref() {
+                                                    gl.iter().find(|g| g.id == group_id).map(|g| g.name.clone()).unwrap_or(group_id.clone())
+                                                } else {
+                                                    group_id.clone()
+                                                };
+                                                let gid = group_id.clone();
+                                                rsx! {
+                                                    div {
+                                                        class: "flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full",
+                                                        span { "{group_name}" }
+                                                        button {
+                                                            class: "ml-1 text-blue-600 hover:text-blue-900 font-bold",
+                                                            onclick: move |_| {
+                                                                let gid2 = gid.clone();
+                                                                access_groups.with_mut(|ags| ags.retain(|ag| *ag != gid2));
+                                                            },
+                                                            "×"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Search input
+                                input {
+                                    r#type: "text",
+                                    class: "w-full border border-gray-200 rounded-md px-3 py-2 text-sm",
+                                    placeholder: "Search groups...",
+                                    value: "{group_search}",
+                                    oninput: move |e| group_search.set(e.value()),
+                                }
+
+                                // Filtered dropdown
+                                {
+                                    let groups_ref = groups.read();
+                                    if let Some(Ok(gl)) = groups_ref.as_ref() {
+                                        let search = group_search().to_lowercase();
+                                        let selected = access_groups.read().clone();
+                                        let filtered: Vec<_> = gl.iter()
+                                            .filter(|g| !selected.contains(&g.id) && (search.is_empty() || g.name.to_lowercase().contains(&search)))
+                                            .cloned()
+                                            .collect();
+                                        if !filtered.is_empty() {
+                                            rsx! {
+                                                div {
+                                                    class: "border border-gray-200 rounded-md mt-1 max-h-40 overflow-y-auto",
+                                                    for group in filtered {
+                                                        {
+                                                            let gid = group.id.clone();
+                                                            rsx! {
+                                                                div {
+                                                                    class: "px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0",
+                                                                    onclick: move |_| {
+                                                                        let gid2 = gid.clone();
+                                                                        access_groups.with_mut(|ags| {
+                                                                            if !ags.contains(&gid2) { ags.push(gid2); }
+                                                                        });
+                                                                        group_search.set(String::new());
+                                                                    },
+                                                                    "{group.name}"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            rsx! {}
+                                        }
+                                    } else {
+                                        rsx! {}
+                                    }
+                                }
+                            }
+
+                            // Show private preview toggle
+                            div {
+                                class: "w-full flex justify-between px-3.5 py-2 border border-gray-200 rounded-md",
+                                p {
+                                    class: "text-sm text-gray-700 pt-[2px]",
+                                    "Show limited preview to normal users"
+                                }
+                                CToggle {
+                                    checked: show_private_preview(),
+                                    onclick: move |_| show_private_preview.toggle()
+                                }
+                            }
+                        }
+                    }
+
                     div {
                         class: "flex-grow bg-white border rounded-md border-gray-200 min-h-36",
                         div {
@@ -925,7 +1076,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                                                 }
                                                                 span {
                                                                     class: "text-sm text-gray-600",
-                                                                    "Uploading..."
+                                                                    { format!("Converting file{}", ".".repeat(1 + upload_dots() as usize)) }
                                                                 }
                                                             } else {
                                                                 svg {
@@ -1382,26 +1533,6 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                     }
                                 }
                             },
-                        }
-                        div {
-                            class: "",
-                            CSelectGroup {
-                                label: "Visibility",
-                                optional: false,
-                                oninput: move |event: FormEvent| {
-                                    if let Ok(vis) = event.value().parse::<ProductVisibility>() {
-                                        visibility.set(vis);
-                                    }
-                                },
-                                for product_vis_type in ProductVisibility::iter() {
-                                    CSelectItem {
-                                        value: "{product_vis_type}",
-                                        selected: if product_vis_type == visibility() { true } else { false },
-                                        key: "{product_vis_type:?}",
-                                        "{product_vis_type.to_string()}"
-                                    }
-                                }
-                            }
                         }
                         div {
                             class: "w-full",

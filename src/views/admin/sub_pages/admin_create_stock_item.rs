@@ -48,7 +48,18 @@ pub fn AdminStockItem(props: AdminStockItemProps) -> Element {
 
     // UI states
     let mut uploading = use_signal(|| false);
+    let mut upload_dots = use_signal(|| 0u8);
     let mut saving = use_signal(|| false);
+
+    // Animate dots while uploading
+    use_coroutine(move |_rx: UnboundedReceiver<()>| async move {
+        loop {
+            gloo_timers::future::TimeoutFuture::new(1000).await;
+            if uploading() {
+                upload_dots.set((upload_dots() + 1) % 3);
+            }
+        }
+    });
 
     // Notification signals
     let mut notification_message = use_signal(|| String::new());
@@ -669,7 +680,10 @@ pub fn AdminStockItem(props: AdminStockItemProps) -> Element {
                                     class: "text-center p-4",
                                     if uploading() {
                                         div { class: "animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-2" }
-                                        span { class: "text-sm text-gray-600", "Uploading..." }
+                                        span {
+                                            class: "text-sm text-gray-600",
+                                            { format!("Converting file{}", ".".repeat(1 + upload_dots() as usize)) }
+                                        }
                                     } else {
                                         svg {
                                             class: "mx-auto h-8 w-8 text-gray-400 mb-2",

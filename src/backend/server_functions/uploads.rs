@@ -63,11 +63,10 @@ async fn upload_image_locally(
     use std::fs;
     use std::path::Path;
 
-    let (processed_data, _final_content_type) =
-        convert_image_to_avif(file_data, &content_type).await?;
+    let webp_data = convert_image_to_webp(file_data.clone(), &content_type).await?;
+    let (avif_data, _) = convert_image_to_avif(file_data, &content_type).await?;
 
     let random_name = Uuid::new_v4().simple().to_string();
-    let unique_filename = format!("{}.avif", random_name);
 
     let upload_base = if std::env::var("RAILWAY_ENVIRONMENT").is_ok() {
         "/app/assets/uploads"
@@ -82,12 +81,13 @@ async fn upload_image_locally(
             .map_err(|e| ServerFnError::new(format!("Failed to create directory: {}", e)))?;
     }
 
-    let file_path = assets_dir.join(&unique_filename);
+    fs::write(assets_dir.join(format!("{}.avif", random_name)), avif_data)
+        .map_err(|e| ServerFnError::new(format!("Failed to write AVIF: {}", e)))?;
 
-    fs::write(&file_path, processed_data)
-        .map_err(|e| ServerFnError::new(format!("Failed to write file: {}", e)))?;
+    fs::write(assets_dir.join(format!("{}.webp", random_name)), webp_data)
+        .map_err(|e| ServerFnError::new(format!("Failed to write WebP: {}", e)))?;
 
-    let public_url = format!("/uploads/products/{}", unique_filename);
+    let public_url = format!("/uploads/products/{}.avif", random_name);
 
     Ok(UploadResponse {
         success: true,
@@ -105,11 +105,10 @@ async fn upload_private_image_locally(
     use std::fs;
     use std::path::Path;
 
-    let (processed_data, _final_content_type) =
-        convert_image_to_avif(file_data, &content_type).await?;
+    let webp_data = convert_image_to_webp(file_data.clone(), &content_type).await?;
+    let (avif_data, _) = convert_image_to_avif(file_data, &content_type).await?;
 
     let random_name = Uuid::new_v4().simple().to_string();
-    let unique_filename = format!("{}.avif", random_name);
 
     let upload_base = if std::env::var("RAILWAY_ENVIRONMENT").is_ok() {
         "/app/assets/private/uploads"
@@ -123,12 +122,13 @@ async fn upload_private_image_locally(
             .map_err(|e| ServerFnError::new(format!("Failed to create directory: {}", e)))?;
     }
 
-    let file_path = assets_dir.join(&unique_filename);
+    fs::write(assets_dir.join(format!("{}.avif", random_name)), avif_data)
+        .map_err(|e| ServerFnError::new(format!("Failed to write AVIF: {}", e)))?;
 
-    fs::write(&file_path, processed_data)
-        .map_err(|e| ServerFnError::new(format!("Failed to write file: {}", e)))?;
+    fs::write(assets_dir.join(format!("{}.webp", random_name)), webp_data)
+        .map_err(|e| ServerFnError::new(format!("Failed to write WebP: {}", e)))?;
 
-    let public_url = format!("/private/uploads/{}", unique_filename);
+    let public_url = format!("/private/uploads/{}.avif", random_name);
 
     Ok(UploadResponse {
         success: true,

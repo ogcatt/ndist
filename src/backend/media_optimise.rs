@@ -1,11 +1,32 @@
-use dioxus::prelude::*;
-
 #[cfg(feature = "server")]
-use image::{ImageFormat, DynamicImage};
+use image::ImageFormat;
 #[cfg(feature = "server")]
 use ravif::{Encoder, Img};
 #[cfg(feature = "server")]
 use rgb::RGBA8;
+#[cfg(feature = "server")]
+use dioxus::prelude::ServerFnError;
+
+#[cfg(feature = "server")]
+pub async fn convert_image_to_webp(
+    file_data: Vec<u8>,
+    content_type: &str,
+) -> Result<Vec<u8>, ServerFnError> {
+    use std::io::Cursor;
+
+    if content_type == "image/webp" {
+        return Ok(file_data);
+    }
+
+    let img = image::load_from_memory(&file_data)
+        .map_err(|e| ServerFnError::new(format!("Failed to load image: {}", e)))?;
+
+    let mut buf = Vec::new();
+    img.write_to(&mut Cursor::new(&mut buf), ImageFormat::WebP)
+        .map_err(|e| ServerFnError::new(format!("Failed to encode WebP: {}", e)))?;
+
+    Ok(buf)
+}
 
 #[cfg(feature = "server")]
 pub async fn convert_image_to_avif(

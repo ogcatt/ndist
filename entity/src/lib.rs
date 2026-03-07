@@ -32,6 +32,7 @@ pub mod variant_images;
 pub mod pre_order;
 pub mod groups;
 pub mod group_members;
+pub mod store_settings;
 
 // Add this custom type for handling string arrays
 pub mod types {

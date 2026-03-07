@@ -76,6 +76,8 @@ pub struct CreateEditProductRequest {
     pub brand: Option<String>,
     pub priority: Option<i32>,
     pub back_order: bool,
+    pub access_groups: Vec<String>,
+    pub show_private_preview: bool,
     pub variants: Vec<CreateEditProductVariantRequest>,
     pub product_variant_stock_item_relations: Option<Vec<ProductVariantStockItemRelation>>,
 }
@@ -524,8 +526,8 @@ pub async fn admin_create_product(
         back_order: ActiveValue::Set(request.back_order),
         mechanism: ActiveValue::NotSet, // Update this later so the UI can pass data to this
         metadata: ActiveValue::NotSet,
-        access_groups: ActiveValue::NotSet, // Update this later so the UI can pass data to this
-        show_private_preview: ActiveValue::Set(false), // Ditto
+        access_groups: ActiveValue::Set(if request.access_groups.is_empty() { None } else { Some(request.access_groups) }),
+        show_private_preview: ActiveValue::Set(request.show_private_preview),
         created_at: ActiveValue::Set(now),
         updated_at: ActiveValue::Set(now),
     };
@@ -721,6 +723,8 @@ pub async fn admin_edit_product(
         brand: ActiveValue::Set(request.brand),
         priority: ActiveValue::Set(request.priority),
         back_order: ActiveValue::Set(request.back_order),
+        access_groups: ActiveValue::Set(if request.access_groups.is_empty() { None } else { Some(request.access_groups) }),
+        show_private_preview: ActiveValue::Set(request.show_private_preview),
         updated_at: ActiveValue::Set(now),
         ..Default::default()
     };

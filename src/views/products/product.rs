@@ -52,6 +52,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
     let mut calc_sample_mg = use_signal(|| String::new());
     let mut calc_temp_sample_mg = use_signal(|| String::new());
     let mut calc_sample_other = use_signal(|| false);
+    let mut calc_vial_idx: Signal<Option<usize>> = use_signal(|| None);
 
     let mut update_product_data = move |product: Product| {
         current_product.set(Some(product.clone()));
@@ -1245,8 +1246,46 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                         }
                     } else if *product_not_found.read() {
                         div {
-                            class: "text-red-500",
-                            { t!("product-not-found", handle: handle()) }
+                            class: "flex flex-col items-center justify-center w-full py-20 text-center px-4",
+                            // Icon
+                            div {
+                                class: "w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-6",
+                                svg {
+                                    class: "w-8 h-8 text-gray-400",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    view_box: "0 0 24 24",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        stroke_width: "1.5",
+                                        d: "M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
+                                    }
+                                }
+                            }
+                            h1 {
+                                class: "text-2xl font-semibold text-gray-900 mb-2",
+                                "Product not found"
+                            }
+                            p {
+                                class: "text-gray-500 text-sm mb-8 max-w-sm",
+                                "We couldn't find a product matching "
+                                span { class: "font-mono text-gray-700", "\"{handle}\"" }
+                                ". It may have been removed or the link may be incorrect."
+                            }
+                            div {
+                                class: "flex flex-col sm:flex-row gap-3",
+                                Link {
+                                    to: Route::Collections {},
+                                    class: "inline-flex items-center justify-center px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors",
+                                    "Browse products"
+                                }
+                                Link {
+                                    to: Route::Home {},
+                                    class: "inline-flex items-center justify-center px-5 py-2.5 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors",
+                                    "Go home"
+                                }
+                            }
                         }
                     }
                 }
@@ -1280,7 +1319,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                         {
                             let has_calc = product.product_form == ProductForm::Vial && {
                                 if let Some(ref variants) = product.variants {
-                                    variants.get(*current_variant.read()).and_then(|v| parse_vial_qty(&v.variant_name)).is_some()
+                                    variants.iter().any(|v| parse_vial_qty(&v.variant_name).is_some())
                                 } else {
                                     false
                                 }
@@ -1321,17 +1360,22 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                         // Reconstitution Calculator Tab
                         {
                             if show_calc() && desc_tab() == 1 {
-                                let vial_qty_parsed = if product.product_form == ProductForm::Vial {
-                                    if let Some(ref variants) = product.variants {
-                                        variants.get(*current_variant.read()).and_then(|v| parse_vial_qty(&v.variant_name))
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                };
-                                let vial_display = vial_qty_parsed.as_ref().map(|(s, _)| s.clone()).unwrap_or_default();
-                                let vial_mg_val = vial_qty_parsed.as_ref().map(|(_, mg)| *mg).unwrap_or(0.0);
+                                let all_parseable_variants: Vec<(usize, String, f64)> =
+                                    if product.product_form == ProductForm::Vial {
+                                        if let Some(ref variants) = product.variants {
+                                            variants.iter().enumerate()
+                                                .filter_map(|(i, v)| parse_vial_qty(&v.variant_name).map(|(s, mg)| (i, s, mg)))
+                                                .collect()
+                                        } else { vec![] }
+                                    } else { vec![] };
+
+                                let eff_idx = calc_vial_idx().unwrap_or(*current_variant.read());
+                                let (vial_display, vial_mg_val) = all_parseable_variants.iter()
+                                    .find(|(i, _, _)| *i == eff_idx)
+                                    .or_else(|| all_parseable_variants.first())
+                                    .map(|(_, s, mg)| (s.clone(), *mg))
+                                    .unwrap_or_default();
+                                let multiple_parseable = all_parseable_variants.len() > 1;
 
                                 let calc_result = move || -> Option<f64> {
                                     let bac_ml_val: f64 = calc_bac_ml().parse().ok()?;
@@ -1363,20 +1407,39 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
 
                                 rsx! {
                                     div {
-                                        class: "mt-4 max-w-xl",
+                                        class: "mt-4 mb-8 max-w-xl",
 
-                                        // Vial amount (pre-filled, disabled)
+                                        // Vial amount (dropdown if multiple parseable variants, else fixed)
                                         div {
                                             class: "max-w-80 mb-4",
-                                            label {
-                                                class: "block text-sm font-medium text-gray-700 mb-1",
-                                                { t!("vial-peptide-amount-label") }
-                                            }
-                                            input {
-                                                r#type: "text",
-                                                value: "{vial_display}",
-                                                disabled: true,
-                                                class: "w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed text-sm",
+                                            if multiple_parseable {
+                                                CSelectGroup {
+                                                    large: true,
+                                                    label: t!("vial-peptide-amount-label"),
+                                                    oninput: move |e: FormEvent| {
+                                                        if let Ok(idx) = e.value().parse::<usize>() {
+                                                            calc_vial_idx.set(Some(idx));
+                                                        }
+                                                    },
+                                                    for (i, display, _) in all_parseable_variants.iter() {
+                                                        CSelectItem {
+                                                            selected: *i == eff_idx,
+                                                            value: "{i}",
+                                                            "{display}"
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                label {
+                                                    class: "block text-sm font-medium text-gray-700 mb-1",
+                                                    { t!("vial-peptide-amount-label") }
+                                                }
+                                                input {
+                                                    r#type: "text",
+                                                    value: "{vial_display}",
+                                                    disabled: true,
+                                                    class: "w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed text-sm",
+                                                }
                                             }
                                         }
 
@@ -1405,9 +1468,6 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                 CSelectItem { selected: calc_bac_ml() == "1", value: "1", { t!("bac-1ml") } }
                                                 CSelectItem { selected: calc_bac_ml() == "2", value: "2", { t!("bac-2ml") } }
                                                 CSelectItem { selected: calc_bac_ml() == "3", value: "3", { t!("bac-3ml") } }
-                                                CSelectItem { selected: calc_bac_ml() == "4", value: "4", { t!("bac-4ml") } }
-                                                CSelectItem { selected: calc_bac_ml() == "5", value: "5", { t!("bac-5ml") } }
-                                                CSelectItem { selected: calc_bac_ml() == "10", value: "10", { t!("bac-10ml") } }
                                             }
                                         }
 

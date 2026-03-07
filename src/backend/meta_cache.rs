@@ -27,7 +27,13 @@ impl MetaTags {
     }
 
     pub fn with_image(mut self, image_url: String) -> Self {
-        self.image_url = Some(image_url);
+        // Use WebP for meta tags as AVIF is not widely supported by social media crawlers
+        let meta_image_url = if image_url.ends_with(".avif") {
+            image_url[..image_url.len() - 5].to_string() + ".webp"
+        } else {
+            image_url
+        };
+        self.image_url = Some(meta_image_url);
         self
     }
 
@@ -138,14 +144,19 @@ fn generate_product_json_ld(product: &crate::backend::front_entities::Product) -
         (0.0, "USD", "OutOfStock")
     };
 
-    // Get product image
+    // Get product image (use WebP for broad compatibility in JSON-LD)
     let image_url = if let Some(ref variants) = product.variants {
         if let Some(variant) = variants.first() {
             if let Some(ref thumbnail_url) = variant.thumbnail_url {
-                if thumbnail_url.starts_with("http") {
+                let url = if thumbnail_url.starts_with("http") {
                     thumbnail_url.clone()
                 } else {
                     format!("https://noveldist.com{}", thumbnail_url)
+                };
+                if url.ends_with(".avif") {
+                    url[..url.len() - 5].to_string() + ".webp"
+                } else {
+                    url
                 }
             } else {
                 "https://noveldist.com/assets/images/preview.jpg".to_string()

@@ -27,3 +27,4 @@ pub use super::variant_images::Entity as VariantImages;
 pub use super::pre_order::Entity as PreOrder;
 pub use super::groups::Entity as Groups;
 pub use super::group_members::Entity as GroupMembers;
+pub use super::store_settings::Entity as StoreSettings;

@@ -1350,6 +1350,10 @@ h4 {
   height: 100vh;
 }
 
+.h-14 {
+  height: 3.5rem;
+}
+
 .max-h-48 {
   max-height: 12rem;
 }
@@ -1372,6 +1376,10 @@ h4 {
 
 .max-h-full {
   max-height: 100%;
+}
+
+.max-h-40 {
+  max-height: 10rem;
 }
 
 .min-h-12 {
@@ -2556,6 +2564,11 @@ h4 {
 .py-\[11px\] {
   padding-top: 11px;
   padding-bottom: 11px;
+}
+
+.py-20 {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
 }
 
 .\!pl-0 {
@@ -3977,6 +3990,11 @@ h4 {
   color: rgb(153 27 27 / var(--tw-text-opacity));
 }
 
+.hover\:text-blue-900:hover {
+  --tw-text-opacity: 1;
+  color: rgb(30 58 138 / var(--tw-text-opacity));
+}
+
 .hover\:underline:hover {
   text-decoration-line: underline;
 }
@@ -4160,6 +4178,10 @@ h4 {
 
   .sm\:grid-cols-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sm\:flex-row {
+    flex-direction: row;
   }
 
   .sm\:items-center {

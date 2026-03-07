@@ -837,6 +837,13 @@ pub struct ShortPreOrder {
     pub tracking_url: Option<String>,
 }
 
+// Store Settings
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct StoreSettingsInfo {
+    pub lock_store: bool,
+    pub lock_comment: Option<String>,
+}
+
 // For blogs
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct BlogPost {
