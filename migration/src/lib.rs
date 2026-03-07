@@ -53,6 +53,8 @@ mod update_order;
 mod add_mechanism_to_products;
 mod add_groups;
 mod add_access_groups;
+mod add_stock_locations;
+mod add_stock_location_enabled;
 
 pub struct Migrator;
 
@@ -115,7 +117,9 @@ impl MigratorTrait for Migrator {
             Box::new(add_mechanism_to_products::Migration),
             Box::new(rename_managers_to_userss::Migration),
             Box::new(add_groups::Migration),
-            Box::new(add_access_groups::Migration)
+            Box::new(add_access_groups::Migration),
+            Box::new(add_stock_locations::Migration),
+            Box::new(add_stock_location_enabled::Migration)
         ]
     }
 }

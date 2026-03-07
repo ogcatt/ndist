@@ -290,6 +290,7 @@ fn OrderDetailModal(
     let mut dropdown_open = use_signal(|| false);
     let mut tracking_url = use_signal(|| String::new());
     let mut operation_feedback = use_signal(|| None::<OperationFeedback>);
+    let mut notes_text = use_signal(|| order.notes.clone().unwrap_or_default());
 
     let is_backordered = has_backorders(&order);
     let contains_preorders = has_preorders(&order);
@@ -342,11 +343,9 @@ fn OrderDetailModal(
                             class: "flex items-center gap-4",
                             // Success/Error feedback
                             if let Some(feedback) = operation_feedback() {
-                                if !feedback.is_success {
-                                    div {
-                                        class: if feedback.is_success { "text-green-600 text-sm font-medium" } else { "text-red-600 text-sm font-medium" },
-                                        "{feedback.message}"
-                                    }
+                                div {
+                                    class: if feedback.is_success { "text-green-600 text-sm font-medium" } else { "text-red-600 text-sm font-medium" },
+                                    "{feedback.message}"
                                 }
                             }
 
@@ -1152,6 +1151,46 @@ fn OrderDetailModal(
                                 }
                             }
 
+                            // Notes
+                            div {
+                                class: "space-y-3",
+                                h3 { class: "font-semibold text-gray-900", "Notes" }
+                                textarea {
+                                    class: "w-full bg-white border border-gray-200 rounded-md p-2 text-sm resize-none",
+                                    rows: "3",
+                                    placeholder: "Add a note...",
+                                    oninput: move |event: FormEvent| notes_text.set(event.value()),
+                                    "{notes_text}"
+                                }
+                                button {
+                                    class: "px-3 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700",
+                                    onclick: {
+                                        let order_id = order.id.clone();
+                                        move |_| {
+                                            let order_id = order_id.clone();
+                                            let notes = notes_text();
+                                            let mut operation_feedback = operation_feedback.clone();
+                                            spawn(async move {
+                                                match server_functions::admin_update_order_notes(order_id, notes).await {
+                                                    Ok(_) => {
+                                                        operation_feedback.set(Some(OperationFeedback {
+                                                            message: "Notes saved".to_string(),
+                                                            is_success: true,
+                                                        }));
+                                                    }
+                                                    Err(e) => {
+                                                        operation_feedback.set(Some(OperationFeedback {
+                                                            message: format!("Failed to save notes: {}", e),
+                                                            is_success: false,
+                                                        }));
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    },
+                                    "Save"
+                                }
+                            }
                         }
 
                         // RIGHT SIDE - Show address for both regular and preorder views

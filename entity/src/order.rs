@@ -57,8 +57,6 @@ pub enum Relation {
     Payment,
     #[sea_orm(has_many = "super::address::Entity")]
     Address,
-    #[sea_orm(has_many = "super::stock_active_reduce::Entity")]
-    StockActiveReduce,
     #[sea_orm(
         belongs_to = "super::customers::Entity",
         from = "Column::CustomerId",
@@ -92,12 +90,6 @@ impl Related<super::address::Entity> for Entity {
 impl Related<super::customers::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Customers.def()
-    }
-}
-
-impl Related<super::stock_active_reduce::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::StockActiveReduce.def()
     }
 }
 

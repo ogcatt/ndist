@@ -24,8 +24,6 @@ use std::collections::HashMap;
 #[cfg(feature = "server")]
 use std::env;
 #[cfg(feature = "server")]
-use std::pin::Pin;
-#[cfg(feature = "server")]
 use super::server_functions::DbErrExt;
 #[cfg(feature = "server")]
 use thiserror::Error;
@@ -47,16 +45,16 @@ use super::shipping_calculations::{
 #[cfg(feature = "server")]
 use crate::backend::server_functions::{
     calculate_variant_stock_quantities, calculate_total_cart_weight, calculate_variant_available_stock,
-    check_discount, get_or_create_basket, get_stock_quantities_for_stock_items,
+    check_discount, get_or_create_basket, get_available_stock_by_item,
 };
 #[cfg(feature = "server")]
 use crate::utils::{capitalize_if_alpha, countries::allowed_countries};
 #[cfg(feature = "server")]
 use entity::{
-    self, address, basket_items, customer_baskets, discounts, user_sessions, users, order,
+    self, address, basket_items, customer_baskets, discounts, order,
     order_item, payment, product_variant_stock_item_relations, product_variants, products,
-    sea_orm_active_enums, stock_active_reduce, stock_backorder_active_reduce, stock_batches,
-    stock_item_relations, stock_items, stock_preorder_active_reduce,
+    sea_orm_active_enums, stock_backorder_active_reduce,
+    stock_location_quantities, stock_preorder_active_reduce,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,26 +175,16 @@ pub async fn init_payment_and_order(
 
     let discounts_fut = discounts::Entity::find().all(db);
 
-    let stock_batches_fut = stock_batches::Entity::find()
-        .filter(stock_batches::Column::LiveQuantity.gt(0.0))
-        .filter(stock_batches::Column::Status.eq(sea_orm_active_enums::StockBatchStatus::Complete))
-        .order_by_asc(stock_batches::Column::CreatedAt)
-        .all(db);
-
-    let stock_relations_fut = stock_item_relations::Entity::find().all(db);
-
     let variant_stock_relations_fut = product_variant_stock_item_relations::Entity::find().all(db);
 
     // Add stock quantities future
-    let stock_quantities_fut = get_stock_quantities_for_stock_items(None);
+    let stock_quantities_fut = get_available_stock_by_item(None);
 
     let (
         products_res,
         basket_res,
         basket_items_res,
         discounts_res,
-        stock_batches_res,
-        stock_relations_res,
         variant_stock_relations_res,
         stock_quantities_res,
     ) = join!(
@@ -204,8 +192,6 @@ pub async fn init_payment_and_order(
         basket_fut,
         basket_items_fut,
         discounts_fut,
-        stock_batches_fut,
-        stock_relations_fut,
         variant_stock_relations_fut,
         stock_quantities_fut
     );
@@ -215,8 +201,6 @@ pub async fn init_payment_and_order(
     let basket_entity = basket_res.map_db_err()?;
     let basket_items_entity = basket_items_res.map_db_err()?;
     let discounts_entities = discounts_res.map_db_err()?;
-    let stock_batches_entities = stock_batches_res.map_db_err()?;
-    let stock_relations_entities = stock_relations_res.map_db_err()?;
     let variant_stock_relations_entities = variant_stock_relations_res.map_db_err()?;
     let stock_results_entities = stock_quantities_res?;
 
@@ -788,15 +772,10 @@ pub async fn init_payment_and_order(
 
     // Create active reduce entries LINKED TO order
 
-    let stock_items_entities: Vec<stock_items::Model> = stock_items::Entity::find().all(db).await.map_db_err()?;
-
     let reduces_to_add = create_stock_reduces(
         basket_items_entity,
-        order_item_ids, // Pass the collected order item IDs
+        order_item_ids,
         order_id.clone(),
-        &stock_batches_entities,
-        &stock_items_entities, // Add the stock items entities
-        &stock_relations_entities,
         &variant_stock_relations_entities,
         &products_entities,
         &product_variants_entities,
@@ -877,11 +856,6 @@ pub async fn cancel_payment(payment_id: &str, expire: bool) -> Result<(), Server
     // Start seaorm transaction
     let txn = db.begin().await.map_db_err()?;
     let now = Utc::now().naive_utc();
-
-    // Delete stock active reduces
-    stock_active_reduce::Entity::delete_many()
-        .filter(stock_active_reduce::Column::OrderId.eq(&order_id))
-        .exec(&txn).await.map_db_err()?;
 
     // Delete pre-order active reduces
     stock_preorder_active_reduce::Entity::delete_many()
@@ -1016,10 +990,6 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
         .unwrap_or_else(|| panic!("Could not get order by order_id (does it exist?)..."));
     let backorder_reduces = backorder_reduces_res.map_db_err()?;
 
-    let stock_active_reduces_mod = stock_active_reduce::Entity::find()
-        .filter(stock_active_reduce::Column::OrderId.eq(&order_id))
-        .all(db).await.map_db_err()?;
-
     // Start seaorm transaction
     let txn = db.begin().await.map_db_err()?;
     let now = Utc::now().naive_utc();
@@ -1086,10 +1056,6 @@ pub async fn complete_payment(payment_id: &str) -> Result<(), ServerFnError> {
         )
         .filter(stock_preorder_active_reduce::Column::OrderId.eq(&order_mod.id))
         .exec(&txn).await.map_db_err()?; txn.commit().await.map_db_err()?;
-
-    // FLATTEN STOCK ITEM ACTIVE REDUCES
-
-    flatten_stock_reduces(stock_active_reduces_mod).await?;
 
     // Send order confirmation email
     let email_service = EmailService::new()?;
@@ -1309,7 +1275,6 @@ pub async fn unlock_cart(basket_id: &str) -> Result<(), ServerFnError> {
 #[derive(Debug)]
 #[cfg(feature = "server")]
 pub struct StockReducesResult {
-    pub regular_reduces: Vec<stock_active_reduce::ActiveModel>,
     pub preorder_reduces: Vec<stock_preorder_active_reduce::ActiveModel>,
     pub backorder_reduces: Vec<stock_backorder_active_reduce::ActiveModel>,
 }
@@ -1325,32 +1290,16 @@ pub enum OrderType {
 #[cfg(feature = "server")]
 pub async fn create_stock_reduces(
     basket_items: Vec<basket_items::Model>,
-    order_item_ids: Vec<String>, // Add this to map basket items to their order item IDs
+    order_item_ids: Vec<String>,
     order_id: String,
-    stock_batches: &Vec<stock_batches::Model>,
-    stock_items: &Vec<stock_items::Model>, // Add stock items parameter
-    stock_relations: &Vec<stock_item_relations::Model>,
     variant_stock_relations: &Vec<product_variant_stock_item_relations::Model>,
     products: &Vec<products::Model>,
     product_variants: &Vec<product_variants::Model>,
-    stock_results: &Vec<StockQuantityResult>,
+    stock_results: &HashMap<String, i32>,
 ) -> Result<StockReducesResult, ServerFnError> {
-    let mut regular_reduces = Vec::new();
     let mut preorder_reduces = Vec::new();
     let mut backorder_reduces = Vec::new();
     let now = Utc::now().naive_utc();
-
-    // Create lookup maps
-    let stock_lookup: HashMap<String, &StockQuantityResult> = stock_results
-        .iter()
-        .map(|result| (result.stock_item_id.clone(), result))
-        .collect();
-
-    // Create stock items lookup map
-    let stock_items_lookup: HashMap<String, &stock_items::Model> = stock_items
-        .iter()
-        .map(|item| (item.id.clone(), item))
-        .collect();
 
     let mut variant_relations_map: HashMap<
         String,
@@ -1364,44 +1313,38 @@ pub async fn create_stock_reduces(
     }
 
     for (index, basket_item) in basket_items.iter().enumerate() {
-        let order_item_id = &order_item_ids[index]; // Get the corresponding order item ID
+        let order_item_id = &order_item_ids[index];
 
-        // Find the variant and then the product to determine order type
         let variant = product_variants
             .iter()
             .find(|variant| variant.id == basket_item.variant_id);
 
-        let (order_type, available_stock) = if let Some(variant) = variant {
+        let order_type = if let Some(variant) = variant {
             let product = products
                 .iter()
                 .find(|product| product.id == variant.product_id);
 
             if let Some(product) = product {
-                // Calculate available stock for this variant
                 let available_stock = calculate_variant_available_stock(
                     &basket_item.variant_id,
                     &variant_relations_map,
-                    &stock_lookup,
+                    stock_results,
                 );
 
-                // Determine order type based on availability and product settings
-                let order_type = if product.back_order && basket_item.quantity > available_stock {
+                if product.back_order && basket_item.quantity > available_stock {
                     OrderType::BackOrder
                 } else if product.pre_order {
                     OrderType::PreOrder
                 } else {
                     OrderType::Regular
-                };
-
-                (order_type, available_stock)
+                }
             } else {
-                (OrderType::Regular, 0)
+                OrderType::Regular
             }
         } else {
-            (OrderType::Regular, 0)
+            OrderType::Regular
         };
 
-        // Get the stock item relations for this variant from pre-fetched data
         let variant_relations: Vec<&product_variant_stock_item_relations::Model> =
             variant_stock_relations
                 .iter()
@@ -1409,44 +1352,32 @@ pub async fn create_stock_reduces(
                 .collect();
 
         for relation in variant_relations {
-            let required_quantity = basket_item.quantity as f64 * relation.quantity;
+            let required_quantity = basket_item.quantity * relation.quantity;
 
             match order_type {
                 OrderType::Regular => {
-                    // Regular processing with child stock item support
-                    let mut item_reduces = process_stock_item_requirement_with_cache(
+                    // Regular items: stock is deducted directly from stock_location_quantities
+                    // when the payment is completed via flatten_preorder_backorder_reduces.
+                    // For immediate payment, no active reduce tracking needed for regular items.
+                }
+                OrderType::PreOrder | OrderType::BackOrder => {
+                    let top_level_reduces = create_top_level_stock_reduces(
                         &relation.stock_item_id,
                         required_quantity,
                         &order_id,
+                        order_item_id,
                         now,
-                        stock_batches,
-                        stock_relations,
+                        &order_type,
                     )?;
-                    regular_reduces.append(&mut item_reduces);
-                }
-                OrderType::PreOrder | OrderType::BackOrder => {
-                    // Get the stock item to retrieve its unit
-                    if let Some(stock_item) = stock_items_lookup.get(&relation.stock_item_id) {
-                        // For preorder/backorder, only create reduces on top-level stock items
-                        let top_level_reduces = create_top_level_stock_reduces(
-                            &relation.stock_item_id,
-                            required_quantity,
-                            &order_id,
-                            order_item_id, // Pass the order item ID
-                            now,
-                            &StockUnit::from_seaorm(stock_item.unit.clone()), // Pass the stock unit from the stock item
-                            &order_type,
-                        )?;
 
-                        match order_type {
-                            OrderType::PreOrder => {
-                                preorder_reduces.extend(top_level_reduces.preorder_reduces)
-                            }
-                            OrderType::BackOrder => {
-                                backorder_reduces.extend(top_level_reduces.backorder_reduces)
-                            }
-                            _ => unreachable!(),
+                    match order_type {
+                        OrderType::PreOrder => {
+                            preorder_reduces.extend(top_level_reduces.preorder_reduces)
                         }
+                        OrderType::BackOrder => {
+                            backorder_reduces.extend(top_level_reduces.backorder_reduces)
+                        }
+                        _ => unreachable!(),
                     }
                 }
             }
@@ -1454,7 +1385,6 @@ pub async fn create_stock_reduces(
     }
 
     Ok(StockReducesResult {
-        regular_reduces,
         preorder_reduces,
         backorder_reduces,
     })
@@ -1464,28 +1394,25 @@ pub async fn create_stock_reduces(
 #[cfg(feature = "server")]
 fn create_top_level_stock_reduces(
     stock_item_id: &str,
-    required_quantity: f64,
+    required_quantity: i32,
     order_id: &str,
     order_item_id: &str,
     created_at: chrono::NaiveDateTime,
-    stock_unit: &StockUnit, // Add stock_unit parameter since we're not using batches
     order_type: &OrderType,
 ) -> Result<StockReducesResult, ServerFnError> {
     let mut preorder_reduces = Vec::new();
     let mut backorder_reduces = Vec::new();
 
-    // Create a single reduce record for the entire required quantity
-    // since we're no longer tracking individual batches
     match order_type {
         OrderType::PreOrder => {
             let reduce = stock_preorder_active_reduce::ActiveModel {
                 id: Set(Uuid::new_v4().to_string()),
                 order_id: Set(order_id.to_string()),
                 order_item_id: Set(order_item_id.to_string()),
-                stock_item_id: Set(stock_item_id.to_string()), // Use stock_item_id instead of stock_batch_id
-                stock_unit: Set(stock_unit.clone().to_seaorm()),
+                stock_item_id: Set(stock_item_id.to_string()),
                 reduction_quantity: Set(required_quantity),
                 active: Set(false),
+                stock_location_id: Set(None),
                 created_at: Set(created_at),
                 updated_at: Set(created_at),
             };
@@ -1496,10 +1423,10 @@ fn create_top_level_stock_reduces(
                 id: Set(Uuid::new_v4().to_string()),
                 order_id: Set(order_id.to_string()),
                 order_item_id: Set(order_item_id.to_string()),
-                stock_item_id: Set(stock_item_id.to_string()), // Use stock_item_id instead of stock_batch_id
-                stock_unit: Set(stock_unit.clone().to_seaorm()),
+                stock_item_id: Set(stock_item_id.to_string()),
                 reduction_quantity: Set(required_quantity),
                 active: Set(false),
+                stock_location_id: Set(None),
                 created_at: Set(created_at),
                 updated_at: Set(created_at),
             };
@@ -1509,118 +1436,17 @@ fn create_top_level_stock_reduces(
     }
 
     Ok(StockReducesResult {
-        regular_reduces: Vec::new(),
         preorder_reduces,
         backorder_reduces,
     })
 }
 
-/// Original function for regular active reduces (supports child stock items)
-#[cfg(feature = "server")]
-fn process_stock_item_requirement_with_cache(
-    stock_item_id: &str,
-    required_quantity: f64,
-    order_id: &str,
-    created_at: chrono::NaiveDateTime,
-    stock_batches: &Vec<stock_batches::Model>,
-    stock_relations: &Vec<stock_item_relations::Model>,
-) -> Result<Vec<stock_active_reduce::ActiveModel>, ServerFnError> {
-    let mut reduces = Vec::new();
-    let mut remaining_quantity = required_quantity;
-
-    // Step 1: Try to fulfill from batches (READY stock) - oldest first
-    let mut item_batches: Vec<&stock_batches::Model> = stock_batches
-        .iter()
-        .filter(|batch| batch.stock_item_id == stock_item_id && batch.live_quantity > 0.0)
-        .collect();
-
-    // Sort by created_at (oldest first) - they should already be sorted from the query
-    item_batches.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-
-    for batch in item_batches {
-        if remaining_quantity <= 0.0 {
-            break;
-        }
-
-        let batch_available = batch.live_quantity;
-        let quantity_to_reduce = remaining_quantity.min(batch_available);
-
-        let reduce = stock_active_reduce::ActiveModel {
-            id: Set(Uuid::new_v4().to_string()),
-            order_id: Set(order_id.to_string()),
-            stock_batch_id: Set(batch.id.clone()),
-            stock_unit: Set(batch.stock_unit_on_creation.clone()),
-            reduction_quantity: Set(quantity_to_reduce),
-            created_at: Set(created_at),
-            updated_at: Set(created_at),
-        };
-
-        reduces.push(reduce);
-        remaining_quantity -= quantity_to_reduce;
-    }
-
-    // Step 2: If still need more, try child stock items (UNREADY stock)
-    if remaining_quantity > 0.0 {
-        let child_relations: Vec<&stock_item_relations::Model> = stock_relations
-            .iter()
-            .filter(|relation| relation.parent_stock_item_id == stock_item_id)
-            .collect();
-
-        if !child_relations.is_empty() {
-            // Calculate how many units we can make from child items
-            let mut max_units_possible = f64::INFINITY;
-
-            // First pass: determine the limiting factor
-            for child_relation in &child_relations {
-                let child_batches: Vec<&stock_batches::Model> = stock_batches
-                    .iter()
-                    .filter(|batch| {
-                        batch.stock_item_id == child_relation.child_stock_item_id
-                            && batch.live_quantity > 0.0
-                    })
-                    .collect();
-
-                let total_child_stock: f64 = child_batches.iter().map(|b| b.live_quantity).sum();
-                let units_from_this_child = total_child_stock / child_relation.quantity;
-                max_units_possible = max_units_possible.min(units_from_this_child);
-            }
-
-            let units_to_make = remaining_quantity.min(max_units_possible.floor());
-
-            if units_to_make > 0.0 {
-                // Second pass: create reduces for each child item
-                for child_relation in child_relations {
-                    let child_quantity_needed = units_to_make * child_relation.quantity;
-
-                    // Recursively process child stock item
-                    let mut child_reduces = process_stock_item_requirement_with_cache(
-                        &child_relation.child_stock_item_id,
-                        child_quantity_needed,
-                        order_id,
-                        created_at,
-                        stock_batches,
-                        stock_relations,
-                    )?;
-
-                    reduces.append(&mut child_reduces);
-                }
-            }
-        }
-    }
-
-    Ok(reduces)
-}
 
 #[cfg(feature = "server")]
 pub async fn insert_stock_reduces(
     reduces_result: StockReducesResult,
     txn: &DatabaseTransaction,
 ) -> Result<(), ServerFnError> {
-    // Insert regular reduces
-    for reduce in reduces_result.regular_reduces {
-        reduce.insert(txn).await.map_db_err()?;
-    }
-
     // Insert preorder reduces
     for reduce in reduces_result.preorder_reduces {
         reduce.insert(txn).await.map_db_err()?;
@@ -1634,41 +1460,6 @@ pub async fn insert_stock_reduces(
     Ok(())
 }
 
-#[cfg(feature = "server")]
-pub async fn flatten_stock_reduces(
-    reduces: Vec<stock_active_reduce::Model>,
-) -> Result<(), ServerFnError> {
-    let db = get_db().await;
-    let txn = db.begin().await.map_db_err()?;
-
-    // Process each reduce
-    for reduce in reduces {
-        // Find the corresponding stock batch
-        let batch = stock_batches::Entity::find()
-            .filter(stock_batches::Column::Id.eq(&reduce.stock_batch_id))
-            .one(&txn).await.map_db_err()?;
-
-        if let Some(batch_model) = batch {
-            // Update the live quantity
-            let new_live_quantity =
-                (batch_model.live_quantity - reduce.reduction_quantity).max(0.0);
-
-            let mut batch_active: stock_batches::ActiveModel = batch_model.into();
-            batch_active.live_quantity = Set(new_live_quantity);
-            batch_active.updated_at = Set(Utc::now().naive_utc());
-
-            // Update the batch
-            batch_active.update(&txn).await.map_db_err()?;
-        }
-
-        // Delete the reduce entry
-        stock_active_reduce::Entity::delete_by_id(&reduce.id)
-            .exec(&txn).await.map_db_err()?;
-    }
-
-    // Commit the transaction txn.commit().await.map_db_err()?;
-    Ok(())
-}
 
 #[cfg(feature = "server")]
 pub async fn flatten_preorder_backorder_reduces(
@@ -1724,20 +1515,18 @@ where
 {
     let reduce = reduce.into();
 
-    // Find available batches for this stock item with matching stock unit
-    let available_batches = stock_batches::Entity::find()
-        .filter(stock_batches::Column::StockItemId.eq(&reduce.stock_item_id))
-        .filter(stock_batches::Column::Status.eq(sea_orm_active_enums::StockBatchStatus::Complete))
-        .filter(stock_batches::Column::StockUnitOnCreation.eq(reduce.stock_unit.clone()))
-        .filter(stock_batches::Column::LiveQuantity.gt(0.0))
-        .order_by_asc(stock_batches::Column::CreatedAt) // Process oldest batches first (FIFO)
+    // Find available location quantities for this stock item, oldest first (FIFO)
+    let location_quantities = stock_location_quantities::Entity::find()
+        .filter(stock_location_quantities::Column::StockItemId.eq(&reduce.stock_item_id))
+        .filter(stock_location_quantities::Column::Quantity.gt(0))
+        .order_by_asc(stock_location_quantities::Column::CreatedAt)
         .all(txn)
         .await.map_db_err()?;
 
     // Check if we can fulfill this reduce with available stock
-    let total_available: f64 = available_batches
+    let total_available: i32 = location_quantities
         .iter()
-        .map(|batch| batch.live_quantity)
+        .map(|lq| lq.quantity)
         .sum();
 
     if total_available < reduce.reduction_quantity {
@@ -1745,24 +1534,23 @@ where
         return Ok(());
     }
 
-    // Process the reduction across batches
+    // Process the reduction across location quantities
     let mut remaining_to_reduce = reduce.reduction_quantity;
 
-    for batch in available_batches {
-        if remaining_to_reduce <= 0.0 {
+    for lq in location_quantities {
+        if remaining_to_reduce <= 0 {
             break;
         }
 
-        let reduction_from_this_batch = remaining_to_reduce.min(batch.live_quantity);
-        let new_live_quantity = batch.live_quantity - reduction_from_this_batch;
+        let reduction_from_this_location = remaining_to_reduce.min(lq.quantity);
+        let new_quantity = lq.quantity - reduction_from_this_location;
 
-        // Update the batch
-        let mut batch_active: stock_batches::ActiveModel = batch.into();
-        batch_active.live_quantity = Set(new_live_quantity);
-        batch_active.updated_at = Set(Utc::now().naive_utc());
-        batch_active.update(txn).await.map_db_err()?;
+        let mut lq_active: stock_location_quantities::ActiveModel = lq.into();
+        lq_active.quantity = Set(new_quantity);
+        lq_active.updated_at = Set(Utc::now().naive_utc());
+        lq_active.update(txn).await.map_db_err()?;
 
-        remaining_to_reduce -= reduction_from_this_batch;
+        remaining_to_reduce -= reduction_from_this_location;
     }
 
     // Delete the original reduce entry
@@ -1787,8 +1575,7 @@ struct ReduceModel {
     pub order_id: String,
     pub order_item_id: String,
     pub stock_item_id: String,
-    pub stock_unit: sea_orm_active_enums::StockUnit,
-    pub reduction_quantity: f64,
+    pub reduction_quantity: i32,
 }
 
 #[cfg(feature = "server")]
@@ -1799,7 +1586,6 @@ impl From<stock_backorder_active_reduce::Model> for ReduceModel {
             order_id: model.order_id,
             order_item_id: model.order_item_id,
             stock_item_id: model.stock_item_id,
-            stock_unit: model.stock_unit,
             reduction_quantity: model.reduction_quantity,
         }
     }
@@ -1813,7 +1599,6 @@ impl From<stock_preorder_active_reduce::Model> for ReduceModel {
             order_id: model.order_id,
             order_item_id: model.order_item_id,
             stock_item_id: model.stock_item_id,
-            stock_unit: model.stock_unit,
             reduction_quantity: model.reduction_quantity,
         }
     }

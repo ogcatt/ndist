@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 #[cfg(feature = "server")]
 use entity::{
     basket_items, blog_posts, customer_baskets, discounts, product_variant_stock_item_relations,
-    products, stock_batches, stock_item_relations, stock_items, pre_order
+    products, stock_items, stock_locations, stock_location_quantities, stock_quantity_adjustments, pre_order
 };
 #[cfg(feature = "server")]
 use pulldown_cmark::{Options, Parser, html};
@@ -89,61 +89,30 @@ impl From<stock_items::Model> for StockItem {
             name: model.name,
             description: model.description,
             thumbnail_ref: model.thumbnail_ref,
-            unit: StockUnit::from_seaorm(model.unit),
             assembly_minutes: model.assembly_minutes,
             default_shipping_days: model.default_shipping_days,
             default_cost: model.default_cost,
             warning_quantity: model.warning_quantity,
-            is_container: model.is_container,
-            //assembled: model.assembled, DEPRECATED
-            sub_relations: None, // Ideally should be Some(Vec<StockItemRelation>) if exists
-            stock_quantities: None,
+            location_quantities: None,
             created_at: model.created_at,
             updated_at: model.updated_at,
         }
     }
 }
 
-/// Convert SeaORM StockItemRelation entity to public-facing StockItemRelation
-#[cfg(feature = "server")]
-impl From<stock_item_relations::Model> for StockItemRelation {
-    fn from(model: stock_item_relations::Model) -> Self {
-        StockItemRelation {
-            // Create a composite ID from parent and child IDs
-            //ref_id: format!("{}_{}", model.parent_stock_item_id, model.child_stock_item_id),
-            parent_stock_item_id: model.parent_stock_item_id,
-            child_stock_item_id: model.child_stock_item_id,
-            quantity: model.quantity,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
-        }
-    }
-}
-
-/// Batch conversion for multiple products (with markdown conversion)
-#[cfg(feature = "server")]
-pub fn convert_stock_item_relations_batch(
-    models: Vec<stock_item_relations::Model>,
-) -> Vec<StockItemRelation> {
-    models.into_iter().map(StockItemRelation::from).collect()
-}
-
-/// Convert SeaORM StockItemRelation entity to public-facing StockItemRelation
+/// Convert SeaORM ProductVariantStockItemRelation entity to public-facing struct
 #[cfg(feature = "server")]
 impl From<product_variant_stock_item_relations::Model> for ProductVariantStockItemRelation {
     fn from(model: product_variant_stock_item_relations::Model) -> Self {
         ProductVariantStockItemRelation {
-            // Create a composite ID from parent and child IDs
-            //ref_id: format!("{}_{}", model.product_variant_id, model.stock_item_id),
             product_variant_id: model.product_variant_id,
             stock_item_id: model.stock_item_id,
             quantity: model.quantity,
-            stock_unit_on_creation: StockUnit::from_seaorm(model.stock_unit_on_creation),
         }
     }
 }
 
-/// Batch conversion for multiple products (with markdown conversion)
+/// Batch conversion for multiple product variant-stock item relations
 #[cfg(feature = "server")]
 pub fn convert_variant_stock_item_relations_batch(
     models: Vec<product_variant_stock_item_relations::Model>,
@@ -154,91 +123,30 @@ pub fn convert_variant_stock_item_relations_batch(
         .collect()
 }
 
-/// Batch conversion for multiple stock items with relations
+/// Convert SeaORM StockItem entity with location quantities
 #[cfg(feature = "server")]
-pub fn convert_stock_items_batch_with_relations(
-    models_with_relations: Vec<(stock_items::Model, Vec<stock_item_relations::Model>)>,
-) -> Vec<StockItem> {
-    models_with_relations
-        .into_iter()
-        .map(|(stock_item_model, relations_models)| {
-            convert_stock_item_with_relations(stock_item_model, relations_models)
-        })
-        .collect()
-}
-
-/// Convert a single stock item with its relations
-#[cfg(feature = "server")]
-pub fn convert_stock_item_with_relations(
+pub fn convert_stock_item_with_locations(
     model: stock_items::Model,
-    relations: Vec<stock_item_relations::Model>,
+    location_quantities: Vec<StockLocationQuantity>,
 ) -> StockItem {
-    let sub_relations = if relations.is_empty() {
-        None
-    } else {
-        Some(relations.into_iter().map(StockItemRelation::from).collect())
-    };
-
     StockItem {
         id: model.id,
         pbi_sku: model.pbi_sku,
         name: model.name,
         description: model.description,
         thumbnail_ref: model.thumbnail_ref,
-        unit: StockUnit::from_seaorm(model.unit),
         assembly_minutes: model.assembly_minutes,
         default_shipping_days: model.default_shipping_days,
         default_cost: model.default_cost,
         warning_quantity: model.warning_quantity,
-        is_container: model.is_container,
-        sub_relations,
-        stock_quantities: None,
+        location_quantities: if location_quantities.is_empty() {
+            None
+        } else {
+            Some(location_quantities)
+        },
         created_at: model.created_at,
         updated_at: model.updated_at,
     }
-}
-
-/// Convert SeaORM StockItem entity to public-facing StockItem with optional stock quantities
-#[cfg(feature = "server")]
-pub fn convert_stock_item_with_quantities(
-    model: stock_items::Model,
-    stock_quantities: &[StockQuantityResult],
-) -> StockItem {
-    // Find matching stock quantity result
-    let matching_quantity = stock_quantities
-        .iter()
-        .find(|sq| sq.stock_item_id == model.id)
-        .cloned(); // Clone the result if found
-
-    StockItem {
-        id: model.id,
-        pbi_sku: model.pbi_sku,
-        name: model.name,
-        description: model.description,
-        thumbnail_ref: model.thumbnail_ref,
-        unit: StockUnit::from_seaorm(model.unit),
-        assembly_minutes: model.assembly_minutes,
-        default_shipping_days: model.default_shipping_days,
-        default_cost: model.default_cost,
-        warning_quantity: model.warning_quantity,
-        is_container: model.is_container,
-        sub_relations: None, // Ideally should be Some(Vec<StockItemRelation>) if exists
-        stock_quantities: matching_quantity, // Will be Some(...) if found, None if not
-        created_at: model.created_at,
-        updated_at: model.updated_at,
-    }
-}
-
-/// Batch conversion for multiple stock items with stock quantities
-#[cfg(feature = "server")]
-pub fn convert_stock_items_batch_with_quantities(
-    models: Vec<stock_items::Model>,
-    stock_quantities: &[StockQuantityResult],
-) -> Vec<StockItem> {
-    models
-        .into_iter()
-        .map(|model| convert_stock_item_with_quantities(model, stock_quantities))
-        .collect()
 }
 
 /// Convert with additional data for fields not present in SeaORM model
@@ -563,6 +471,7 @@ impl From<customer_baskets::Model> for CustomerBasket {
             country_code: model.country_code,
             discount_code: model.discount_code,
             shipping_option: model.shipping_option.map(ShippingOption::from_seaorm),
+            stock_location_id: model.stock_location_id,
             shipping_results: None,
             locked: model.locked,
             payment_id: model.payment_id,
@@ -673,103 +582,71 @@ impl Default for ProductPhase {
     }
 }
 
+/// StockLocationShippingMethod enum conversions
 #[cfg(feature = "server")]
-impl StockUnit {
-    pub fn from_seaorm(unit: entity::sea_orm_active_enums::StockUnit) -> Self {
-        match unit {
-            entity::sea_orm_active_enums::StockUnit::Multiples => Self::Multiples,
-            entity::sea_orm_active_enums::StockUnit::Grams => Self::Grams,
-            entity::sea_orm_active_enums::StockUnit::Milliliters => Self::Milliliters,
+impl StockLocationShippingMethod {
+    pub fn from_seaorm(method: entity::sea_orm_active_enums::StockLocationShippingMethod) -> Self {
+        match method {
+            entity::sea_orm_active_enums::StockLocationShippingMethod::Manual => Self::Manual,
+            entity::sea_orm_active_enums::StockLocationShippingMethod::FlatRate => Self::FlatRate,
         }
     }
 
-    // Convert FROM Frontend TO SeaORM
-    pub fn to_seaorm(&self) -> entity::sea_orm_active_enums::StockUnit {
+    pub fn to_seaorm(&self) -> entity::sea_orm_active_enums::StockLocationShippingMethod {
         match self {
-            Self::Multiples => entity::sea_orm_active_enums::StockUnit::Multiples,
-            Self::Grams => entity::sea_orm_active_enums::StockUnit::Grams,
-            Self::Milliliters => entity::sea_orm_active_enums::StockUnit::Milliliters,
+            Self::Manual => entity::sea_orm_active_enums::StockLocationShippingMethod::Manual,
+            Self::FlatRate => entity::sea_orm_active_enums::StockLocationShippingMethod::FlatRate,
         }
     }
 }
 
-// For stock batches
-
-/// Convert SeaORM StockBatch entity to public-facing StockBatch
+/// Convert SeaORM StockLocation entity to public-facing StockLocation
 #[cfg(feature = "server")]
-impl From<stock_batches::Model> for StockBatch {
-    fn from(model: stock_batches::Model) -> Self {
-        let stock_unit = StockUnit::from_seaorm(model.stock_unit_on_creation.clone());
-
-        StockBatch {
+impl From<stock_locations::Model> for StockLocation {
+    fn from(model: stock_locations::Model) -> Self {
+        StockLocation {
             id: model.id,
-            stock_batch_code: model.stock_batch_code,
-            stock_item_id: model.stock_item_id,
-            comment: model.comment,
-            supplier: model.supplier,
-            original_quantity: convert_quantity_to_stock_unit_quantity(
-                Some(model.original_quantity),
-                &stock_unit,
-            ),
-            live_quantity: convert_quantity_to_stock_unit_quantity(
-                Some(model.live_quantity),
-                &stock_unit,
-            ),
-            stock_unit_on_creation: stock_unit,
-            cost_usd: model.cost_usd,
-            arrival_date: model.arrival_date,
-            warehouse_location: StockBatchLocation::from_seaorm(model.warehouse_location),
-            tracking_url: model.tracking_url,
-            assembled: model.assembled,
-            status: StockBatchStatus::from_seaorm(model.status),
+            name: model.name,
+            description: model.description,
+            shipping_method: StockLocationShippingMethod::from_seaorm(model.shipping_method),
+            flat_rate_usd: model.flat_rate_usd,
+            country: model.country,
             created_at: model.created_at,
             updated_at: model.updated_at,
+            quantities: None,
         }
     }
 }
 
-/// Multi conversion for multiple stock batches (with markdown conversion)
+/// Convert SeaORM StockLocationQuantity entity to public-facing struct
 #[cfg(feature = "server")]
-pub fn convert_stock_batches_batch(models: Vec<stock_batches::Model>) -> Vec<StockBatch> {
-    models.into_iter().map(StockBatch::from).collect()
-}
-
-/// StockBatchStatus enum conversions
-#[cfg(feature = "server")]
-impl StockBatchStatus {
-    pub fn from_seaorm(status: entity::sea_orm_active_enums::StockBatchStatus) -> Self {
-        match status {
-            entity::sea_orm_active_enums::StockBatchStatus::Draft => Self::Draft,
-            entity::sea_orm_active_enums::StockBatchStatus::Paid => Self::Paid,
-            entity::sea_orm_active_enums::StockBatchStatus::Complete => Self::Complete,
-            entity::sea_orm_active_enums::StockBatchStatus::Issue => Self::Issue,
-        }
-    }
-
-    // Convert FROM Frontend TO SeaORM
-    pub fn to_seaorm(&self) -> entity::sea_orm_active_enums::StockBatchStatus {
-        match self {
-            Self::Draft => entity::sea_orm_active_enums::StockBatchStatus::Draft,
-            Self::Paid => entity::sea_orm_active_enums::StockBatchStatus::Paid,
-            Self::Complete => entity::sea_orm_active_enums::StockBatchStatus::Complete,
-            Self::Issue => entity::sea_orm_active_enums::StockBatchStatus::Issue,
+impl From<stock_location_quantities::Model> for StockLocationQuantity {
+    fn from(model: stock_location_quantities::Model) -> Self {
+        StockLocationQuantity {
+            id: model.id,
+            stock_item_id: model.stock_item_id,
+            stock_location_id: model.stock_location_id,
+            stock_location_name: None,
+            quantity: model.quantity,
+            enabled: model.enabled,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+            adjustments: None,
         }
     }
 }
 
-/// StockBatchLocation enum conversions
+/// Convert SeaORM StockQuantityAdjustment entity to public-facing struct
 #[cfg(feature = "server")]
-impl StockBatchLocation {
-    pub fn from_seaorm(location: entity::sea_orm_active_enums::StockBatchLocation) -> Self {
-        match location {
-            entity::sea_orm_active_enums::StockBatchLocation::EU => Self::EU,
-        }
-    }
-
-    // Convert FROM Frontend TO SeaORM
-    pub fn to_seaorm(&self) -> entity::sea_orm_active_enums::StockBatchLocation {
-        match self {
-            Self::EU => entity::sea_orm_active_enums::StockBatchLocation::EU,
+impl From<stock_quantity_adjustments::Model> for StockQuantityAdjustment {
+    fn from(model: stock_quantity_adjustments::Model) -> Self {
+        StockQuantityAdjustment {
+            id: model.id,
+            stock_location_quantity_id: model.stock_location_quantity_id,
+            delta: model.delta,
+            note: model.note,
+            adjusted_by: model.adjusted_by,
+            created_at: model.created_at,
         }
     }
 }

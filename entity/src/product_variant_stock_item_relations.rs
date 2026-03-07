@@ -1,6 +1,5 @@
 //! `SeaORM` Entity for ProductStockItemRelations
 
-use super::sea_orm_active_enums::StockUnit;
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -10,9 +9,7 @@ pub struct Model {
     pub product_variant_id: String,
     #[sea_orm(primary_key, column_name = "stockItemId", auto_increment = false, column_type = "Text")]
     pub stock_item_id: String,
-    pub quantity: f64,
-    #[sea_orm(column_name = "stockUnitOnCreation")]
-    pub stock_unit_on_creation: StockUnit,
+    pub quantity: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

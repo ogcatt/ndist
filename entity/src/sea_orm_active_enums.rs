@@ -196,22 +196,19 @@ impl std::fmt::Display for QuantityType {
 // NEW INVENTORY ENUMS
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "stock_unit")]
-pub enum StockUnit {
-    #[sea_orm(string_value = "MULTIPLES")]
-    Multiples,
-    #[sea_orm(string_value = "GRAMS")]
-    Grams,
-    #[sea_orm(string_value = "MILLILITERS")]
-    Milliliters,
+#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "stock_location_shipping_method")]
+pub enum StockLocationShippingMethod {
+    #[sea_orm(string_value = "MANUAL")]
+    Manual,
+    #[sea_orm(string_value = "FLAT_RATE")]
+    FlatRate,
 }
 
-impl std::fmt::Display for StockUnit {
+impl std::fmt::Display for StockLocationShippingMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            StockUnit::Multiples => write!(f, "Multiples"),
-            StockUnit::Grams => write!(f, "Grams"),
-            StockUnit::Milliliters => write!(f, "Milliliters"),
+            StockLocationShippingMethod::Manual => write!(f, "Manual"),
+            StockLocationShippingMethod::FlatRate => write!(f, "Flat Rate"),
         }
     }
 }
@@ -237,48 +234,6 @@ impl std::fmt::Display for StockMode {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "stock_batch_status")]
-pub enum StockBatchStatus {
-    #[sea_orm(string_value = "DRAFT")]
-    Draft,
-    #[sea_orm(string_value = "PAID")]
-    Paid,
-    #[sea_orm(string_value = "COMPLETE")]
-    Complete,
-    #[sea_orm(string_value = "ISSUE")]
-    Issue,
-}
-
-impl std::fmt::Display for StockBatchStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StockBatchStatus::Draft => write!(f, "Draft"),
-            StockBatchStatus::Paid => write!(f, "Paid"),
-            StockBatchStatus::Complete => write!(f, "Complete"),
-            StockBatchStatus::Issue => write!(f, "Issue"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
-#[sea_orm(
-    rs_type = "String",
-    db_type = "Enum",
-    enum_name = "stock_batch_location"
-)]
-pub enum StockBatchLocation {
-    #[sea_orm(string_value = "EU")]
-    EU,
-}
-
-impl std::fmt::Display for StockBatchLocation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StockBatchLocation::EU => write!(f, "EU"),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "Enum", enum_name = "shipping_option")]

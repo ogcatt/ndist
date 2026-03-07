@@ -158,6 +158,8 @@ pub struct CustomerBasket {
     pub discount_code: Option<String>,
     // The shipping option selected for this order (non-db calc, only able to be set if country matches)
     pub shipping_option: Option<ShippingOption>,
+    // The selected stock location for this basket session
+    pub stock_location_id: Option<String>,
     // Calculated shipping option results (temporary for frontend, recalculated per-request)
     pub shipping_results: Option<Vec<ShippingResult>>,
     // If this cart is locked and can't be modified (used when payment is active)
@@ -377,135 +379,58 @@ impl fmt::Display for Category {
     }
 }
 
-// NEW FRONT ENTITIES (REQUIRES INTEGRATION)
+// STOCK LOCATION ENTITIES
 
 #[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
-pub enum StockUnit {
-    #[strum(to_string = "Units")]
-    Multiples,
-    #[strum(to_string = "Grams")]
-    Grams,
-    #[strum(to_string = "Milliliters")]
-    Milliliters,
+pub enum StockLocationShippingMethod {
+    #[strum(to_string = "Manual")]
+    Manual,
+    #[strum(to_string = "Flat Rate")]
+    FlatRate,
 }
 
-#[derive(Debug, Display, Clone, PartialEq, EnumIter, EnumString, Serialize, Deserialize)]
-pub enum StockUnitQuantity {
-    #[strum(to_string = "Units")]
-    Multiples(i32),
-    #[strum(to_string = "Grams")]
-    Grams(f64),
-    #[strum(to_string = "Milliliters")]
-    Milliliters(f64),
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct StockLocation {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub shipping_method: StockLocationShippingMethod,
+    // Flat rate cost in USD (used when shipping_method = FlatRate)
+    pub flat_rate_usd: Option<f64>,
+    // Country/city reference for this location
+    pub country: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    // Per-item quantities at this location (populated when querying a specific location)
+    pub quantities: Option<Vec<StockLocationQuantity>>,
 }
 
-/// Helper function to convert Option<f64> to StockUnitQuantity based on StockUnit
-pub fn convert_quantity_to_stock_unit_quantity(
-    quantity: Option<f64>,
-    stock_unit: &StockUnit,
-) -> StockUnitQuantity {
-    match quantity {
-        Some(qty) => match stock_unit {
-            StockUnit::Multiples => StockUnitQuantity::Multiples(qty as i32),
-            StockUnit::Grams => StockUnitQuantity::Grams(qty),
-            StockUnit::Milliliters => StockUnitQuantity::Milliliters(qty),
-        },
-        None => {
-            // Use the From<StockUnit> implementation to get default zero values
-            StockUnitQuantity::from(stock_unit.clone())
-        }
-    }
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct StockLocationQuantity {
+    pub id: String,
+    pub stock_item_id: String,
+    pub stock_location_id: String,
+    pub stock_location_name: Option<String>,
+    pub quantity: i32,
+    pub enabled: bool,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    // Adjustment audit log for this location quantity
+    pub adjustments: Option<Vec<StockQuantityAdjustment>>,
 }
 
-impl StockUnitQuantity {
-    pub fn to_f64(&self) -> f64 {
-        match self {
-            StockUnitQuantity::Multiples(n) => *n as f64,
-            StockUnitQuantity::Grams(g) => *g,
-            StockUnitQuantity::Milliliters(ml) => *ml,
-        }
-    }
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
+pub struct StockQuantityAdjustment {
+    pub id: String,
+    pub stock_location_quantity_id: String,
+    // Positive value = addition, negative value = subtraction
+    pub delta: i32,
+    // Required note explaining the adjustment
+    pub note: String,
+    // User ID of who made the adjustment (if available)
+    pub adjusted_by: Option<String>,
+    pub created_at: NaiveDateTime,
 }
-
-impl From<StockUnit> for StockUnitQuantity {
-    fn from(unit: StockUnit) -> Self {
-        match unit {
-            StockUnit::Multiples => StockUnitQuantity::Multiples(0),
-            StockUnit::Grams => StockUnitQuantity::Grams(0.0),
-            StockUnit::Milliliters => StockUnitQuantity::Milliliters(0.0),
-        }
-    }
-}
-
-// Add these helper functions for StockUnitQuantity operations
-impl StockUnitQuantity {
-    pub fn add(&self, other: &StockUnitQuantity) -> Result<StockUnitQuantity, String> {
-        match (self, other) {
-            (StockUnitQuantity::Multiples(a), StockUnitQuantity::Multiples(b)) => {
-                Ok(StockUnitQuantity::Multiples(a + b))
-            }
-            (StockUnitQuantity::Grams(a), StockUnitQuantity::Grams(b)) => {
-                Ok(StockUnitQuantity::Grams(a + b))
-            }
-            (StockUnitQuantity::Milliliters(a), StockUnitQuantity::Milliliters(b)) => {
-                Ok(StockUnitQuantity::Milliliters(a + b))
-            }
-            _ => Err("Cannot add different unit types".to_string()),
-        }
-    }
-
-    pub fn multiply(&self, factor: f64) -> StockUnitQuantity {
-        match self {
-            StockUnitQuantity::Multiples(n) => {
-                StockUnitQuantity::Multiples((*n as f64 * factor) as i32)
-            }
-            StockUnitQuantity::Grams(g) => StockUnitQuantity::Grams(g * factor),
-            StockUnitQuantity::Milliliters(ml) => StockUnitQuantity::Milliliters(ml * factor),
-        }
-    }
-
-    pub fn divide(&self, factor: f64) -> Result<StockUnitQuantity, String> {
-        if factor == 0.0 {
-            return Err("Cannot divide by zero".to_string());
-        }
-
-        match self {
-            StockUnitQuantity::Multiples(n) => {
-                Ok(StockUnitQuantity::Multiples((*n as f64 / factor) as i32))
-            }
-            StockUnitQuantity::Grams(g) => Ok(StockUnitQuantity::Grams(g / factor)),
-            StockUnitQuantity::Milliliters(ml) => Ok(StockUnitQuantity::Milliliters(ml / factor)),
-        }
-    }
-
-    pub fn get_unit(&self) -> StockUnit {
-        match self {
-            StockUnitQuantity::Multiples(_) => StockUnit::Multiples,
-            StockUnitQuantity::Grams(_) => StockUnit::Grams,
-            StockUnitQuantity::Milliliters(_) => StockUnit::Milliliters,
-        }
-    }
-
-    pub fn is_zero(&self) -> bool {
-        match self {
-            StockUnitQuantity::Multiples(n) => *n == 0,
-            StockUnitQuantity::Grams(g) => *g == 0.0,
-            StockUnitQuantity::Milliliters(ml) => *ml == 0.0,
-        }
-    }
-}
-
-/*
-impl From<front_entities::StockUnit> for StockUnit {
-    fn from(frontend_unit: front_entities::StockUnit) -> Self {
-        match frontend_unit {
-            front_entities::StockUnit::Multiples => StockUnit::Multiples,
-            front_entities::StockUnit::Grams => StockUnit::Grams,
-            front_entities::StockUnit::Milliliters => StockUnit::Milliliters,
-        }
-    }
-}
-*/
 
 #[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
 pub enum StockMode {
@@ -524,7 +449,7 @@ pub enum StockMode {
 pub struct StockItem {
     // Unique stock item ID
     pub id: String,
-    // Unique stock item SKU(must start with PBI or PBX e.g PBI0001)
+    // Unique stock item SKU (must start with PBI or PBX e.g PBI0001)
     pub pbi_sku: String,
     // Reference name for this stock item
     pub name: String,
@@ -532,189 +457,31 @@ pub struct StockItem {
     pub description: Option<String>,
     // Stock item thumbnail reference
     pub thumbnail_ref: Option<String>,
-    // Unit type for this item (THIS DOES NOT CHANGE)
-    pub unit: StockUnit,
     // Estimated time of assembly per item (minutes)
     pub assembly_minutes: Option<i32>,
     // Default shipping time in days including synthesis/creation time
     pub default_shipping_days: Option<i32>,
-    // Default cost in USD (maybe dynamic later on?)
+    // Default cost in USD
     pub default_cost: Option<f64>,
-    // Warning quantity (if below this it should be restocked)
-    pub warning_quantity: Option<f64>,
-    // True if it can contain other stock items
-    pub is_container: bool,
-    // Exists if a stock item containing other products. Assembled means it is readily available.
-    //pub assembled: Option<bool>, // DEPRECATED
-    // The child stock items which constitute this stock item (is_container may be deprecated)
-    pub sub_relations: Option<Vec<StockItemRelation>>,
-    // Data about stock quantities
-    pub stock_quantities: Option<StockQuantityResult>,
-
+    // Warning quantity in units (if total stock falls below this, item needs restocking)
+    pub warning_quantity: Option<i32>,
+    // Per-location stock quantities for this item
+    pub location_quantities: Option<Vec<StockLocationQuantity>>,
     // When the stock item was created
     pub created_at: NaiveDateTime,
     // When the stock item was last updated
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
-pub struct StockItemRelation {
-    // ID (NOT A REAL ID ON THE DATABASE, a fake composite id just used for ease of use)
-    // pub ref_id: String, DEPRECATED
-    // The ID of the parent stock item which is containing the child stock item
-    pub parent_stock_item_id: String,
-    // The child stock item
-    pub child_stock_item_id: String,
-    // The quantity of the child stock item
-    pub quantity: f64,
-    // When this relation was created
-    pub created_at: NaiveDateTime,
-    // When this relation was last updated
-    pub updated_at: NaiveDateTime,
-}
-
 // Join table for Product Variant-StockItem relations
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct ProductVariantStockItemRelation {
-    // ID (NOT A REAL ID ON THE DATABASE, a fake composite id just used for ease of use)
-    // pub ref_id: String, // DEPRECATED
-    // Reference of the product of relevance
+    // Reference of the product variant
     pub product_variant_id: String,
-    // Stock item which is
+    // The linked stock item
     pub stock_item_id: String,
-    // Quantity of this stock item in units (default 1 for multiples)
-    pub quantity: f64,
-    // The type of stock unit for this
-    pub stock_unit_on_creation: StockUnit,
-}
-
-#[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
-pub enum StockBatchStatus {
-    #[strum(to_string = "Draft")]
-    // If the stock batch has not yet been purchased/initiated
-    Draft,
-    #[strum(to_string = "Paid")]
-    // If a stock batch has been paid for but has not arrived yet
-    Paid,
-    #[strum(to_string = "Complete (Available)")]
-    // If a stock batch is fully complete and arrived
-    Complete,
-    #[strum(to_string = "Issue")]
-    // An exception case if the batch fails in any way
-    Issue,
-}
-
-#[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
-pub enum StockBatchLocation {
-    #[strum(to_string = "EU")]
-    // Europe warehouse/inventory
-    EU, // ANY OTHER FUTURE LOCATIONS WOULD GO HERE
-}
-
-// Unique entry for each batch of stock
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
-pub struct StockBatch {
-    // UUID of this stock batch
-    pub id: String,
-    // Five letter code representing a unique stock batch (e.g B34835)
-    pub stock_batch_code: String,
-    // Relation to stock item,
-    pub stock_item_id: String,
-    // Comment on this stock batch such as location
-    pub comment: Option<String>,
-    // The supplier of this stock batch
-    pub supplier: Option<String>,
-    // On arrival, quantity of this stock item in units (default 1 for multiples). STATIC value.
-    pub original_quantity: StockUnitQuantity,
-    // By default this is the same as original quantity, this is a dynamic quantity based on orders (if orders are not fufilled this quantity should be +1'd)
-    pub live_quantity: StockUnitQuantity,
-    // The type of stock unit for this
-    pub stock_unit_on_creation: StockUnit,
-    // Cost of purchase of stock batch (including shipping)
-    pub cost_usd: Option<f64>,
-    // When the stock batch arrived to be processed
-    pub arrival_date: Option<NaiveDateTime>,
-    // The location of this stock batch and where its arrival place is
-    pub warehouse_location: StockBatchLocation,
-    // Tracking link if one exists
-    pub tracking_url: Option<String>,
-    // Exists if a this batch has completed assembly. Assembled means it is readily available (will default true if stock item containing other items).
-    pub assembled: bool,
-    // The status of this stock batch: DRAFT / PAID / COMPLETE / ISSUE
-    pub status: StockBatchStatus,
-
-    // When the stock batch item was created
-    pub created_at: NaiveDateTime,
-    // When the stock batch item was last updated
-    pub updated_at: NaiveDateTime,
-}
-
-impl StockBatch {
-    /// Sums original_quantity and live_quantity from a vector of StockBatches
-    /// Only includes batches where stock_unit_on_creation matches the provided unit
-    /// Returns (total_original_quantity, total_live_quantity, total_pending_quantity)
-    /// - Complete batches: counted in original and live totals
-    /// - Paid batches: counted in pending total
-    /// - Draft/Issue batches: ignored
-    pub fn sum_quantities_by_unit(
-        batches: &[StockBatch],
-        target_unit: &StockUnit,
-    ) -> (StockUnitQuantity, StockUnitQuantity, StockUnitQuantity) {
-        let mut total_original = 0.0;
-        let mut total_live = 0.0;
-        let mut total_pending = 0.0;
-
-        for batch in batches {
-            // Only process if the batch's unit matches the target unit
-            if batch.stock_unit_on_creation == *target_unit {
-                match batch.status {
-                    StockBatchStatus::Complete => {
-                        total_original += batch.original_quantity.to_f64();
-                        total_live += batch.live_quantity.to_f64();
-                    }
-                    StockBatchStatus::Paid => {
-                        total_pending += batch.original_quantity.to_f64();
-                    }
-                    StockBatchStatus::Draft | StockBatchStatus::Issue => {
-                        // Ignore these statuses
-                    }
-                }
-            }
-        }
-
-        // Convert back to StockUnitQuantity based on the target unit
-        let original_quantity = match target_unit {
-            StockUnit::Multiples => StockUnitQuantity::Multiples(total_original as i32),
-            StockUnit::Grams => StockUnitQuantity::Grams(total_original),
-            StockUnit::Milliliters => StockUnitQuantity::Milliliters(total_original),
-        };
-
-        let live_quantity = match target_unit {
-            StockUnit::Multiples => StockUnitQuantity::Multiples(total_live as i32),
-            StockUnit::Grams => StockUnitQuantity::Grams(total_live),
-            StockUnit::Milliliters => StockUnitQuantity::Milliliters(total_live),
-        };
-
-        let pending_quantity = match target_unit {
-            StockUnit::Multiples => StockUnitQuantity::Multiples(total_pending as i32),
-            StockUnit::Grams => StockUnitQuantity::Grams(total_pending),
-            StockUnit::Milliliters => StockUnitQuantity::Milliliters(total_pending),
-        };
-
-        (original_quantity, live_quantity, pending_quantity)
-    }
-}
-
-// Result from stock quantity calculations
-#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
-pub struct StockQuantityResult {
-    pub stock_item_id: String,
-    pub ready_stock_quantity: StockUnitQuantity,
-    pub unready_stock_quantity: StockUnitQuantity,
-    pub total_stock_quantity: StockUnitQuantity,
-    pub total_child_stock_items: i32,
-    pub stock_too_low: bool,
-    pub required_father_replacement_level: Option<StockUnitQuantity>,
+    // Quantity of this stock item consumed per unit of the product variant
+    pub quantity: i32,
 }
 
 #[derive(Debug, Display, Clone, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
@@ -1006,9 +773,9 @@ pub struct BackOrPreOrderActiveReduce {
     pub order_id: String,
     pub order_item_id: String,
     pub stock_item_id: String,
-    pub stock_unit: StockUnit,
-    pub reduction_quantity: f64,
+    pub reduction_quantity: i32,
     pub active: bool,
+    pub stock_location_id: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

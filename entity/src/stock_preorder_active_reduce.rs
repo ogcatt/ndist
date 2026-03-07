@@ -1,4 +1,3 @@
-use super::sea_orm_active_enums::StockUnit;
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -12,11 +11,11 @@ pub struct Model {
     pub order_item_id: String,
     #[sea_orm(column_name = "stockItemId", column_type = "Text")]
     pub stock_item_id: String,
-    #[sea_orm(column_name = "stockUnit")]
-    pub stock_unit: StockUnit,
-    #[sea_orm(column_name = "reductionQuantity", column_type = "Double")]
-    pub reduction_quantity: f64,
+    #[sea_orm(column_name = "reductionQuantity")]
+    pub reduction_quantity: i32,
     pub active: bool,
+    #[sea_orm(column_name = "stockLocationId", column_type = "Text", nullable)]
+    pub stock_location_id: Option<String>,
     #[sea_orm(column_name = "createdAt")]
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
@@ -41,6 +40,14 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     StockItems,
+    #[sea_orm(
+        belongs_to = "super::stock_locations::Entity",
+        from = "Column::StockLocationId",
+        to = "super::stock_locations::Column::Id",
+        on_update = "Cascade",
+        on_delete = "SetNull"
+    )]
+    StockLocations,
 }
 
 impl Related<super::order::Entity> for Entity {
@@ -52,6 +59,12 @@ impl Related<super::order::Entity> for Entity {
 impl Related<super::stock_items::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::StockItems.def()
+    }
+}
+
+impl Related<super::stock_locations::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StockLocations.def()
     }
 }
 

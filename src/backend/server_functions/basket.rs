@@ -44,7 +44,7 @@ use super::discounts::check_discount;
 use super::stock_calculations::StockCalculationError;
 
 #[cfg(feature = "server")]
-use super::stock_calculations::get_stock_quantities_for_stock_items;
+use super::stock_calculations::get_available_stock_by_item;
 
 #[derive(Debug, Clone)]
 pub enum CartError {
@@ -202,7 +202,7 @@ pub async fn get_or_create_basket() -> Result<CustomerBasket, ServerFnError> {
                 .find_with_related(product_variants::Entity)
                 .all(db),
             product_variant_stock_item_relations::Entity::find().all(db),
-            get_stock_quantities_for_stock_items(None),
+            get_available_stock_by_item(None),
             discounts::Entity::find().all(db)
         );
 
@@ -525,16 +525,11 @@ pub async fn check_cart(
     mut basket_items: Vec<basket_items::Model>,
     products_with_variants: Vec<(products::Model, Vec<product_variants::Model>)>,
     variant_relations: Vec<product_variant_stock_item_relations::Model>,
-    stock_quantities: Vec<StockQuantityResult>,
+    stock_quantities: HashMap<String, i32>,
 ) -> Result<(Vec<basket_items::Model>, Vec<CheckCartResult>), ServerFnError> {
     let db = get_db().await;
     let mut results = Vec::new();
     let mut items_to_remove = Vec::new();
-
-    let stock_map: std::collections::HashMap<String, &StockQuantityResult> = stock_quantities
-        .iter()
-        .map(|sq| (sq.stock_item_id.clone(), sq))
-        .collect();
 
     let variant_map: std::collections::HashMap<String, &product_variants::Model> =
         products_with_variants
@@ -595,20 +590,13 @@ pub async fn check_cart(
                 let mut has_zero_stock = false;
 
                 for relation in relations {
-                    if let Some(stock_result) = stock_map.get(&relation.stock_item_id) {
-                        let required_per_item = &relation.quantity;
-                        let available_stock = &stock_result.total_stock_quantity;
-
-                        if available_stock.is_zero() {
+                    if let Some(&available) = stock_quantities.get(&relation.stock_item_id) {
+                        if available == 0 {
                             has_zero_stock = true;
                             break;
                         }
-
-                        let available_f64 = available_stock.to_f64();
-                        let required_f64 = required_per_item;
-
-                        if *required_f64 > 0.0 {
-                            let possible_quantity = (available_f64 / required_f64).floor() as i32;
+                        if relation.quantity > 0 {
+                            let possible_quantity = available / relation.quantity;
                             max_possible_quantity = max_possible_quantity.min(possible_quantity);
                         }
                     }
@@ -670,6 +658,7 @@ pub async fn create_new_basket() -> Result<CustomerBasket, BasketError> {
         locked: ActiveValue::Set(false),
         payment_id: ActiveValue::Set(None),
         payment_failed_at: ActiveValue::NotSet,
+        stock_location_id: ActiveValue::NotSet,
         created_at: ActiveValue::Set(now),
         updated_at: ActiveValue::Set(now),
     };
@@ -799,7 +788,7 @@ pub async fn add_or_update_basket_item(
             .find_with_related(product_variants::Entity)
             .all(db),
         product_variant_stock_item_relations::Entity::find().all(db),
-        get_stock_quantities_for_stock_items(None),
+        get_available_stock_by_item(None),
         discounts::Entity::find()
             .filter(discounts::Column::Active.eq(true))
             .filter(discounts::Column::AutoApply.eq(true))
@@ -811,14 +800,9 @@ pub async fn add_or_update_basket_item(
 
     let products_with_variants = products_with_variants_res.map_db_err()?;
     let variant_relations = variant_relations_res.map_db_err()?;
-    let stock_quantities = stock_quantities_res?;
+    let stock_map: HashMap<String, i32> = stock_quantities_res?;
     let auto_apply_discounts = auto_apply_discounts_res.map_db_err()?;
     let current_basket_items = current_basket_items_res.map_db_err()?;
-
-    let stock_map: std::collections::HashMap<String, StockQuantityResult> = stock_quantities
-        .into_iter()
-        .map(|sq| (sq.stock_item_id.clone(), sq))
-        .collect();
 
     let mut found_variant: Option<product_variants::Model> = None;
     let mut parent_product: Option<products::Model> = None;
@@ -859,15 +843,14 @@ pub async fn add_or_update_basket_item(
         let mut max_q = i32::MAX;
         let mut zero = false;
         for rel in rels {
-            if let Some(stock) = stock_map.get(&rel.stock_item_id) {
-                if stock.total_stock_quantity.is_zero() {
+            if let Some(&available) = stock_map.get(&rel.stock_item_id) {
+                if available == 0 {
                     zero = true;
                     break;
                 }
-                let available = stock.total_stock_quantity.to_f64();
                 let per_unit_needed = rel.quantity;
-                if per_unit_needed > 0.0 {
-                    let possible = (available / per_unit_needed).floor() as i32;
+                if per_unit_needed > 0 {
+                    let possible = available / per_unit_needed;
                     if possible < max_q {
                         max_q = possible;
                     }
@@ -1218,7 +1201,7 @@ pub async fn set_basket_item_quantity(
             .find_with_related(product_variants::Entity)
             .all(db),
         product_variant_stock_item_relations::Entity::find().all(db),
-        get_stock_quantities_for_stock_items(None),
+        get_available_stock_by_item(None),
         discounts::Entity::find()
             .filter(discounts::Column::Active.eq(true))
             .filter(discounts::Column::AutoApply.eq(true))
@@ -1230,14 +1213,9 @@ pub async fn set_basket_item_quantity(
 
     let products_with_variants = products_with_variants_res.map_db_err()?;
     let variant_relations = variant_relations_res.map_db_err()?;
-    let stock_quantities = stock_quantities_res?;
+    let stock_map: HashMap<String, i32> = stock_quantities_res?;
     let auto_apply_discounts = auto_apply_discounts_res.map_db_err()?;
     let current_basket_items = current_basket_items_res.map_db_err()?;
-
-    let stock_map: std::collections::HashMap<String, StockQuantityResult> = stock_quantities
-        .into_iter()
-        .map(|sq| (sq.stock_item_id.clone(), sq))
-        .collect();
 
     let mut found_variant: Option<product_variants::Model> = None;
     let mut parent_product: Option<products::Model> = None;
@@ -1278,15 +1256,14 @@ pub async fn set_basket_item_quantity(
         let mut max_q = i32::MAX;
         let mut zero = false;
         for rel in rels {
-            if let Some(stock) = stock_map.get(&rel.stock_item_id) {
-                if stock.total_stock_quantity.is_zero() {
+            if let Some(&available) = stock_map.get(&rel.stock_item_id) {
+                if available == 0 {
                     zero = true;
                     break;
                 }
-                let available = stock.total_stock_quantity.to_f64();
                 let per_unit_needed = rel.quantity;
-                if per_unit_needed > 0.0 {
-                    let possible = (available / per_unit_needed).floor() as i32;
+                if per_unit_needed > 0 {
+                    let possible = available / per_unit_needed;
                     if possible < max_q {
                         max_q = possible;
                     }

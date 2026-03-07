@@ -267,7 +267,7 @@ pub async fn admin_get_orders(get_expired: bool) -> Result<Vec<OrderInfo>, Serve
                     order_id: br.order_id.clone(),
                     order_item_id: br.order_item_id.clone(),
                     stock_item_id: br.stock_item_id.clone(),
-                    stock_unit: StockUnit::from_seaorm(br.stock_unit.clone()),
+                    stock_location_id: br.stock_location_id.clone(),
                     reduction_quantity: br.reduction_quantity,
                     active: br.active,
                     created_at: br.created_at.clone(),
@@ -283,7 +283,7 @@ pub async fn admin_get_orders(get_expired: bool) -> Result<Vec<OrderInfo>, Serve
                     order_id: pr.order_id.clone(),
                     order_item_id: pr.order_item_id.clone(),
                     stock_item_id: pr.stock_item_id.clone(),
-                    stock_unit: StockUnit::from_seaorm(pr.stock_unit.clone()),
+                    stock_location_id: pr.stock_location_id.clone(),
                     reduction_quantity: pr.reduction_quantity,
                     active: pr.active,
                     created_at: pr.created_at.clone(),
@@ -845,6 +845,35 @@ pub async fn admin_express_pre_order_send_tracking(
         Ok(()) => tracing::info!("success sending order confirmation email"),
         Err(e) => tracing::info!("{e:?}"),
     }
+
+    Ok(())
+}
+
+#[server]
+pub async fn admin_update_order_notes(
+    order_id: String,
+    notes: String,
+) -> Result<(), ServerFnError> {
+    let db = get_db().await;
+
+    let order = order::Entity::find()
+        .filter(order::Column::Id.eq(order_id))
+        .one(db)
+        .await
+        .map_db_err()?
+        .expect("Could not get order model when trying to update notes");
+
+    let mut order_active: order::ActiveModel = order.into();
+    order_active.notes = ActiveValue::Set(if notes.trim().is_empty() {
+        None
+    } else {
+        Some(notes)
+    });
+
+    order::Entity::update(order_active)
+        .exec(db)
+        .await
+        .map_db_err()?;
 
     Ok(())
 }

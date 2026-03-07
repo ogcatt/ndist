@@ -9,14 +9,16 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub id: String,
     #[sea_orm(column_name = "customerId", column_type = "Text", nullable)]
-    pub customer_id: Option<String>, // THIS SHOULD BE OPTIONAL
+    pub customer_id: Option<String>,
 
     #[sea_orm(column_name = "countryCode", column_type = "Text", nullable)]
     pub country_code: Option<String>,
     #[sea_orm(column_name = "discountCode", column_type = "Text", nullable)]
     pub discount_code: Option<String>,
     #[sea_orm(column_name = "shippingOption", nullable)]
-    pub shipping_option: Option<ShippingOption>, // Import from active enums
+    pub shipping_option: Option<ShippingOption>,
+    #[sea_orm(column_name = "stockLocationId", column_type = "Text", nullable)]
+    pub stock_location_id: Option<String>,
 
     // Payment-related
     #[sea_orm(column_name = "locked")]
@@ -45,6 +47,14 @@ pub enum Relation {
         on_delete = "Restrict"
     )]
     Customers,
+    #[sea_orm(
+        belongs_to = "super::stock_locations::Entity",
+        from = "Column::StockLocationId",
+        to = "super::stock_locations::Column::Id",
+        on_update = "Cascade",
+        on_delete = "SetNull"
+    )]
+    StockLocations,
 }
 
 impl Related<super::basket_items::Entity> for Entity {
@@ -56,6 +66,12 @@ impl Related<super::basket_items::Entity> for Entity {
 impl Related<super::customers::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Customers.def()
+    }
+}
+
+impl Related<super::stock_locations::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::StockLocations.def()
     }
 }
 

@@ -8,7 +8,7 @@ use wasm_bindgen::JsCast;
 use crate::backend::cache::*;
 use crate::backend::front_entities::*;
 use crate::backend::server_functions;
-use crate::components::{Meta, ProductCard, SmilesViewer};
+use crate::components::{CSelectGroup, CSelectItem, CTextBox, Meta, ProductCard, SelectPlaceholder, SmilesViewer};
 use crate::utils::GLOBAL_CART;
 
 #[component]
@@ -43,6 +43,15 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
     let mut error_line = use_signal(|| String::new());
     let mut adding = use_signal(|| false);
     let max_per_item = 12i32;
+
+    // Reconstitution calculator state
+    let mut desc_tab = use_signal(|| 0usize);
+    let mut show_calc = use_signal(|| false);
+    let mut calc_vol = use_signal(|| "0.5".to_string());
+    let mut calc_bac_ml = use_signal(|| String::new());
+    let mut calc_sample_mg = use_signal(|| String::new());
+    let mut calc_temp_sample_mg = use_signal(|| String::new());
+    let mut calc_sample_other = use_signal(|| false);
 
     let mut update_product_data = move |product: Product| {
         current_product.set(Some(product.clone()));
@@ -841,6 +850,47 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                 }
                             }
 
+                            // Reconstitution Calculator Link (Vials only)
+                            {
+                                if product.product_form == ProductForm::Vial {
+                                    let vial_qty = if let Some(ref variants) = product.variants {
+                                        variants.get(*current_variant.read()).and_then(|v| parse_vial_qty(&v.variant_name))
+                                    } else {
+                                        None
+                                    };
+                                    if let Some((qty_str, _)) = vial_qty {
+                                        rsx! {
+                                            div {
+                                                class: "mb-3 -mt-2",
+                                                button {
+                                                    class: "flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 cursor-pointer",
+                                                    onclick: move |_| {
+                                                        desc_tab.set(1);
+                                                        show_calc.set(true);
+                                                        spawn(async move {
+                                                            let _ = document::eval(r#"
+                                                                const el = document.getElementById('product-description-section');
+                                                                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                                            "#).await;
+                                                        });
+                                                    },
+                                                    img {
+                                                        src: asset!("/assets/icons/flask-outline.svg"),
+                                                        style: "height:14px;",
+                                                        alt: "calculator"
+                                                    }
+                                                    "Reconstitution Calculator ({qty_str})"
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        rsx! {}
+                                    }
+                                } else {
+                                    rsx! {}
+                                }
+                            }
+
                             // Product Details Collapsible Card
                             div {
                                 class: "divide-y mb-5 elevation-none border rounded-md",
@@ -863,20 +913,31 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                     div {
                                                         class: "flex flex-col gap-y-4",
                                                         div {
-                                                            span { class: "font-medium", { t!("container-material") } }
-                                                            p { "{get_container_material(&product.product_form)}" }
-                                                        }
-                                                        div {
-                                                            span { class: "font-medium", { t!("product-form") } }
-                                                            p { "{product.product_form}" }
-                                                        }
-                                                        div {
                                                             span { class: "font-medium", { t!("physical-description") } }
                                                             p {
                                                                 if let Some(ref desc) = product.physical_description {
                                                                     "{desc}"
                                                                 } else {
                                                                     "-"
+                                                                }
+                                                            }
+                                                        }
+                                                        div {
+                                                            span { class: "font-medium", "SKUs" }
+                                                            p {
+                                                                if let Some(ref variants) = product.variants {
+                                                                    for (i, variant) in variants.iter().enumerate() {
+                                                                        if let Some(ref sku) = variant.pbx_sku {
+                                                                            "{sku}「{variant.variant_name}」"
+                                                                        } else {
+                                                                            "None ({variant.variant_name})"
+                                                                        }
+                                                                        if i != variants.len() - 1 {
+                                                                            "  "
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    { t!("no-variants") }
                                                                 }
                                                             }
                                                         }
@@ -906,25 +967,6 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                             _ => "-"
                                                                         }
                                                                     }
-                                                                }
-                                                            }
-                                                        }
-                                                        div {
-                                                            span { class: "font-medium", "SKUs" }
-                                                            p {
-                                                                if let Some(ref variants) = product.variants {
-                                                                    for (i, variant) in variants.iter().enumerate() {
-                                                                        if let Some(ref sku) = variant.pbx_sku {
-                                                                            "{sku}「{variant.variant_name}」"
-                                                                        } else {
-                                                                            "None ({variant.variant_name})"
-                                                                        }
-                                                                        if i != variants.len() - 1 {
-                                                                            "  "
-                                                                        }
-                                                                    }
-                                                                } else {
-                                                                    { t!("no-variants") }
                                                                 }
                                                             }
                                                         }
@@ -1213,6 +1255,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
             // Research and Details Section
             if let Some(product) = current_product.read().as_ref() {
                 div {
+                    id: "product-description-section",
                     class: "flex justify-center w-full",
                     div {
                         class: "justify-self-start w-full max-w-[1130px]",
@@ -1233,13 +1276,248 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                             }
                         }
 
-                        // Main description
-                        if let Some(ref main_desc) = product.main_description_md {
-                            div {
-                                class: "mt-4",
-                                div {
-                                    dangerous_inner_html: "{main_desc}"
+                        // Tab navigation (only for vials with parseable qty when calculator is active)
+                        {
+                            let has_calc = product.product_form == ProductForm::Vial && {
+                                if let Some(ref variants) = product.variants {
+                                    variants.get(*current_variant.read()).and_then(|v| parse_vial_qty(&v.variant_name)).is_some()
+                                } else {
+                                    false
                                 }
+                            };
+                            if show_calc() && has_calc {
+                                rsx! {
+                                    div {
+                                        class: "flex border-b mb-1",
+                                        button {
+                                            class: if desc_tab() == 0 { "px-4 py-2 border-b-2 border-blue-600 text-blue-600 font-medium text-sm -mb-px" } else { "px-4 py-2 text-gray-500 hover:text-gray-700 text-sm" },
+                                            onclick: move |_| desc_tab.set(0),
+                                            "Description"
+                                        }
+                                        button {
+                                            class: if desc_tab() == 1 { "px-4 py-2 border-b-2 border-blue-600 text-blue-600 font-medium text-sm -mb-px" } else { "px-4 py-2 text-gray-500 hover:text-gray-700 text-sm" },
+                                            onclick: move |_| desc_tab.set(1),
+                                            "Reconstitution Calculator"
+                                        }
+                                    }
+                                }
+                            } else {
+                                rsx! {}
+                            }
+                        }
+
+                        // Main description
+                        if !show_calc() || desc_tab() == 0 {
+                            if let Some(ref main_desc) = product.main_description_md {
+                                div {
+                                    class: "mt-4",
+                                    div {
+                                        dangerous_inner_html: "{main_desc}"
+                                    }
+                                }
+                            }
+                        }
+
+                        // Reconstitution Calculator Tab
+                        {
+                            if show_calc() && desc_tab() == 1 {
+                                let vial_qty_parsed = if product.product_form == ProductForm::Vial {
+                                    if let Some(ref variants) = product.variants {
+                                        variants.get(*current_variant.read()).and_then(|v| parse_vial_qty(&v.variant_name))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+                                let vial_display = vial_qty_parsed.as_ref().map(|(s, _)| s.clone()).unwrap_or_default();
+                                let vial_mg_val = vial_qty_parsed.as_ref().map(|(_, mg)| *mg).unwrap_or(0.0);
+
+                                let calc_result = move || -> Option<f64> {
+                                    let bac_ml_val: f64 = calc_bac_ml().parse().ok()?;
+                                    let sample_mg_val: f64 = calc_sample_mg().parse().ok()?;
+                                    let vol_val: f64 = calc_vol().parse().ok()?;
+                                    if vial_mg_val > 0.0 && bac_ml_val > 0.0 && sample_mg_val > 0.0 && vol_val > 0.0 {
+                                        let result = ((sample_mg_val / (vial_mg_val / bac_ml_val)) * 100.0 * 10.0).round() / 10.0;
+                                        Some(result)
+                                    } else {
+                                        None
+                                    }
+                                };
+                                let calc_ruler_pct = move || -> f64 {
+                                    if let Some(result) = calc_result() {
+                                        let vol_val: f64 = calc_vol().parse().unwrap_or(1.0);
+                                        (result / vol_val).min(100.0)
+                                    } else {
+                                        0.0
+                                    }
+                                };
+                                let get_ruler_img = move || {
+                                    match calc_vol().as_str() {
+                                        "0.3" => asset!("/assets/images/ruler-0.3.webp"),
+                                        "0.5" => asset!("/assets/images/ruler-0.5.webp"),
+                                        "1" => asset!("/assets/images/ruler-1.webp"),
+                                        _ => asset!("/assets/images/ruler-0.5.webp"),
+                                    }
+                                };
+
+                                rsx! {
+                                    div {
+                                        class: "mt-4 max-w-xl",
+
+                                        // Vial amount (pre-filled, disabled)
+                                        div {
+                                            class: "max-w-80 mb-4",
+                                            label {
+                                                class: "block text-sm font-medium text-gray-700 mb-1",
+                                                { t!("vial-peptide-amount-label") }
+                                            }
+                                            input {
+                                                r#type: "text",
+                                                value: "{vial_display}",
+                                                disabled: true,
+                                                class: "w-full border rounded-md px-3 py-2 bg-gray-100 text-gray-500 cursor-not-allowed text-sm",
+                                            }
+                                        }
+
+                                        // Syringe volume
+                                        div {
+                                            class: "max-w-80 mb-4",
+                                            CSelectGroup {
+                                                large: true,
+                                                label: t!("syringe-volume-label"),
+                                                oninput: move |e: FormEvent| calc_vol.set(e.value()),
+                                                SelectPlaceholder { { t!("select-ml-volume") } }
+                                                CSelectItem { selected: calc_vol() == "0.3", value: "0.3", { t!("volume-03ml") } }
+                                                CSelectItem { selected: calc_vol() == "0.5", value: "0.5", { t!("volume-05ml") } }
+                                                CSelectItem { selected: calc_vol() == "1", value: "1", { t!("volume-1ml") } }
+                                            }
+                                        }
+
+                                        // Bacteriostatic water
+                                        div {
+                                            class: "max-w-80 mb-4",
+                                            CSelectGroup {
+                                                large: true,
+                                                label: t!("bac-water-amount-label"),
+                                                oninput: move |e: FormEvent| calc_bac_ml.set(e.value()),
+                                                SelectPlaceholder { { t!("select-bac-ml") } }
+                                                CSelectItem { selected: calc_bac_ml() == "1", value: "1", { t!("bac-1ml") } }
+                                                CSelectItem { selected: calc_bac_ml() == "2", value: "2", { t!("bac-2ml") } }
+                                                CSelectItem { selected: calc_bac_ml() == "3", value: "3", { t!("bac-3ml") } }
+                                                CSelectItem { selected: calc_bac_ml() == "4", value: "4", { t!("bac-4ml") } }
+                                                CSelectItem { selected: calc_bac_ml() == "5", value: "5", { t!("bac-5ml") } }
+                                                CSelectItem { selected: calc_bac_ml() == "10", value: "10", { t!("bac-10ml") } }
+                                            }
+                                        }
+
+                                        // Dose selection
+                                        div {
+                                            class: "max-w-80 mb-4",
+                                            CSelectGroup {
+                                                large: true,
+                                                label: t!("sample-peptide-amount-label"),
+                                                oninput: move |e: FormEvent| {
+                                                    let value = e.value();
+                                                    calc_temp_sample_mg.set(value.clone());
+                                                    if value == "other" {
+                                                        calc_sample_other.set(true);
+                                                    } else {
+                                                        calc_sample_other.set(false);
+                                                        calc_sample_mg.set(value);
+                                                    }
+                                                },
+                                                SelectPlaceholder { { t!("select-compound-mg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "0.1", value: "0.1", { t!("sample-100mcg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "0.2", value: "0.2", { t!("sample-200mcg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "0.25", value: "0.25", { t!("sample-250mcg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "0.5", value: "0.5", { t!("sample-500mcg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "1", value: "1", { t!("sample-1mg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "3", value: "3", { t!("sample-3mg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "5", value: "5", { t!("sample-5mg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "10", value: "10", { t!("sample-10mg") } }
+                                                CSelectItem { selected: calc_temp_sample_mg() == "other", value: "other", { t!("other") } }
+                                            }
+                                        }
+
+                                        if calc_sample_other() {
+                                            div {
+                                                class: "mt-2 mb-4 max-w-80",
+                                                CTextBox {
+                                                    large: true,
+                                                    value: calc_sample_mg(),
+                                                    label: t!("compound-mg-input-label"),
+                                                    is_number: true,
+                                                    oninput: move |e: FormEvent| calc_sample_mg.set(e.value())
+                                                }
+                                            }
+                                        }
+
+                                        // Result
+                                        if !calc_bac_ml().is_empty() && !calc_sample_mg().is_empty() {
+                                            h2 {
+                                                class: "mt-8 md:mt-6 text-xl md:text-2xl",
+                                                { format!("{} ", t!("result-text-part1")) }
+                                                if !calc_sample_mg().is_empty() {
+                                                    "{calc_sample_mg()} mg"
+                                                    if let Ok(val) = calc_sample_mg().parse::<f64>() {
+                                                        if val <= 1.0 {
+                                                            " ({val * 1000.0} μg)"
+                                                        }
+                                                    }
+                                                } else {
+                                                    { t!("selected-mg") }
+                                                }
+                                                { t!("result-text-part2") }
+                                                if let Some(result) = calc_result() {
+                                                    " {result}"
+                                                }
+                                                span {
+                                                    class: "hidden md:inline-block",
+                                                    ":"
+                                                }
+                                                if calc_result().is_some() {
+                                                    span {
+                                                        class: "inline-block md:hidden",
+                                                        { t!("result-text-mobile") }
+                                                    }
+                                                } else {
+                                                    span {
+                                                        class: "inline-block md:hidden",
+                                                        ":"
+                                                    }
+                                                }
+                                            }
+                                            div {
+                                                class: "mt-8 mb-4",
+                                                style: "max-width: 850px;",
+                                                img {
+                                                    src: get_ruler_img(),
+                                                    alt: { t!("ruler-alt-text") }
+                                                }
+                                                if calc_result().is_some() {
+                                                    div {
+                                                        class: "bg-blue-300 opacity-75 h-12",
+                                                        style: format!(
+                                                            "margin-top: -{}px; width: {}%; {}",
+                                                            if calc_vol() == "0.3" { "80" } else { "64" },
+                                                            calc_ruler_pct(),
+                                                            if calc_ruler_pct() >= 100.0 { "background-color: red !important;" } else { "" }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            if calc_ruler_pct() >= 100.0 {
+                                                p {
+                                                    class: "text-red-500",
+                                                    { t!("not-large-enough") }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                rsx! {}
                             }
                         }
 
@@ -1534,5 +1812,23 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                 }
             }
         }
+    }
+}
+
+fn parse_vial_qty(variant_name: &str) -> Option<(String, f64)> {
+    let name = variant_name.split(" - ").next().unwrap_or(variant_name).trim();
+    let num_end = name
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(name.len());
+    if num_end == 0 {
+        return None;
+    }
+    let val: f64 = name[..num_end].parse().ok()?;
+    let unit = name[num_end..].trim().to_lowercase();
+    match unit.as_str() {
+        "mg" => Some((format!("{} mg", val), val)),
+        "mcg" | "µg" | "ug" => Some((format!("{} mcg", val), val / 1000.0)),
+        "g" => Some((format!("{} g", val), val * 1000.0)),
+        _ => None,
     }
 }

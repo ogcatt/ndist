@@ -31,7 +31,7 @@ use std::path::PathBuf;
 use unic_langid::langid;
 use views::{
     About, AdminAnalytics, AdminContent, AdminCreateBlogPost, AdminCreateDiscount,
-    AdminCreateProduct, AdminCreateStockItem, AdminUsers, AdminDiscounts, AdminEditBlogPost,
+    AdminCreateProduct, AdminCreateStockItem, AdminStockLocations, AdminUsers, AdminDiscounts, AdminEditBlogPost,
     AdminEditDiscount, AdminEditProduct, AdminEditStockItem, AdminInventory, AdminOrders,
     AdminProducts, AdminSettings, AdminCreateGroup, AdminEditGroup, AdminGroups, BlogPostPage, BlogPosts, Cart, Checkout, CheckoutPayment,
     Collection, Collections, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound, GroupPage,
@@ -116,6 +116,8 @@ enum Route {
                 AdminCreateStockItem {},
                 #[route("/edit/:id")]
                 AdminEditStockItem { id: String },
+                #[route("/locations")]
+                AdminStockLocations {},
             #[end_nest]
             #[route("/dashboard/users")]
             AdminUsers {},

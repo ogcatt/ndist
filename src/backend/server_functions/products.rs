@@ -35,7 +35,7 @@ use super::auth::{check_admin_permission, get_current_user};
 
 #[cfg(feature = "server")]
 use super::stock_calculations::{
-    calculate_variant_stock_quantities, get_stock_quantities_for_stock_items,
+    calculate_variant_stock_quantities, get_available_stock_by_item,
 };
 
 #[cfg(feature = "server")]
@@ -188,7 +188,7 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
                     .all(db)
                     .await
             },
-            get_stock_quantities_for_stock_items(None)
+            get_available_stock_by_item(None)
         );
 
     let user = user_result?;
@@ -228,7 +228,7 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
     let mut products =
         entity_conversions::convert_products_batch_with_context(product_models, contexts)?;
 
-    products = calculate_variant_stock_quantities(products, variant_relations, stock_qty_results);
+    products = calculate_variant_stock_quantities(products, variant_relations, &stock_qty_results);
 
     // Filter products based on access groups
     let filtered_products: Vec<Product> = products
@@ -316,7 +316,7 @@ pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, Se
                 .all(db)
                 .await
         },
-        get_stock_quantities_for_stock_items(None)
+        get_available_stock_by_item(None)
     );
 
     let variant_relations = variant_relations_result.map_db_err()?;
@@ -343,7 +343,7 @@ pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, Se
     )?;
 
     // Calculate stock quantities
-    products = calculate_variant_stock_quantities(products, variant_relations, stock_qty_results);
+    products = calculate_variant_stock_quantities(products, variant_relations, &stock_qty_results);
 
     Ok(products.into_iter().next())
 }
@@ -891,7 +891,6 @@ pub async fn admin_edit_product(
                 product_variant_id: ActiveValue::Set(rel.product_variant_id),
                 stock_item_id: ActiveValue::Set(rel.stock_item_id),
                 quantity: ActiveValue::Set(rel.quantity),
-                stock_unit_on_creation: ActiveValue::Set(rel.stock_unit_on_creation.to_seaorm()),
             };
 
             PVSIR::Entity::insert(am)

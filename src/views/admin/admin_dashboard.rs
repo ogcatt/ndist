@@ -169,7 +169,14 @@ pub fn Dashboard() -> Element {
         if let Some(Ok(list)) = ref_.as_ref() {
             let low: Vec<StockItem> = list
                 .iter()
-                .filter(|i| i.stock_quantities.as_ref().map(|q| q.stock_too_low).unwrap_or(false))
+                .filter(|i| {
+                    if let Some(warn) = i.warning_quantity {
+                        let total: i32 = i.location_quantities.as_deref().unwrap_or(&[]).iter().map(|lq| lq.quantity).sum();
+                        total < warn
+                    } else {
+                        false
+                    }
+                })
                 .take(6)
                 .cloned()
                 .collect();
@@ -326,7 +333,14 @@ pub fn Dashboard() -> Element {
                                 class: "flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-100",
                                 img { class: "w-4 h-4 opacity-50", src: asset!("/assets/icons/file-tray-stacked.svg") }
                                 span { class: "flex-1 text-sm text-gray-700", "Orders" }
-                                span { class: "text-xs text-gray-500 font-mono", "{orders_30d} / 30d" }
+                                if unfulfilled > 0 {
+                                    span {
+                                        class: "min-w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium px-1",
+                                        "{unfulfilled}"
+                                    }
+                                } else {
+                                    span { class: "text-xs text-gray-500 font-mono", "{orders_30d} / 30d" }
+                                }
                             }
                             Link { to: Route::AdminProducts {},
                                 class: "flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-100",
@@ -382,15 +396,8 @@ pub fn Dashboard() -> Element {
                                         span { class: "flex-1 text-xs font-medium text-gray-900 truncate", "{item.name}" }
                                         span { class: "text-xs text-orange-600 font-mono shrink-0",
                                             {
-                                                if let Some(q) = &item.stock_quantities {
-                                                    match &q.ready_stock_quantity {
-                                                        StockUnitQuantity::Multiples(n) => format!("{} units", n),
-                                                        StockUnitQuantity::Grams(g) => format!("{:.1}g", g),
-                                                        StockUnitQuantity::Milliliters(ml) => format!("{:.1}mL", ml),
-                                                    }
-                                                } else {
-                                                    "—".to_string()
-                                                }
+                                                let total: i32 = item.location_quantities.as_deref().unwrap_or(&[]).iter().map(|lq| lq.quantity).sum();
+                                                format!("{} units", total)
                                             }
                                         }
                                     }

@@ -37,8 +37,7 @@ pub struct EditProductVariant {
 struct UiVariantStockRelation {
     pub product_variant_id: String,
     pub stock_item_id: String,
-    pub quantity: f64,
-    pub stock_unit_on_creation: StockUnit,
+    pub quantity: i32,
 }
 
 #[derive(PartialEq, Props, Clone)]
@@ -203,8 +202,8 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                 pbx_sku: v
                                     .pbx_sku
                                     .clone()
-                                    .unwrap_or(String::from("PBX9999"))
-                                    .strip_prefix("PBX")
+                                    .unwrap_or(String::from("NDX9999"))
+                                    .strip_prefix("NDX")
                                     .unwrap_or("9999")
                                     .to_string(),
                             })
@@ -243,7 +242,6 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                         product_variant_id: r.product_variant_id.clone(),
                         stock_item_id: r.stock_item_id.clone(),
                         quantity: r.quantity,
-                        stock_unit_on_creation: r.stock_unit_on_creation.clone(),
                     })
                     .collect();
 
@@ -254,7 +252,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
     });
 
     let mut add_stock_relation =
-        move |variant_index: usize, stock_item_id: String, quantity: f64, stock_unit: StockUnit| {
+        move |variant_index: usize, stock_item_id: String, quantity: i32| {
             let Some(variant_id) = variants().get(variant_index).and_then(|v| v.id.clone()) else {
                 notification_message.set(
                     "Please save the product to create the variant before adding stock relations."
@@ -283,7 +281,6 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                 product_variant_id: variant_id.clone(),
                 stock_item_id: stock_item_id.clone(),
                 quantity,
-                stock_unit_on_creation: stock_unit,
             };
 
             variant_stock_relations.with_mut(|rels| rels.push(rel));
@@ -332,16 +329,12 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
         }
 
         if let Some(Ok(all_stock_items)) = stock_items.read().as_ref() {
-            if let Some(stock_item) = all_stock_items
-                .iter()
-                .find(|item| item.id == selected_stock_item_id())
-            {
-                if let Ok(quantity) = stock_quantity().parse::<f64>() {
+            if all_stock_items.iter().any(|item| item.id == selected_stock_item_id()) {
+                if let Ok(quantity) = stock_quantity().parse::<i32>() {
                     add_stock_relation(
                         variant_index,
                         selected_stock_item_id(),
                         quantity,
-                        stock_item.unit.clone(),
                     );
 
                     selected_stock_item_id.set(String::new());
@@ -425,7 +418,6 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                         product_variant_id: r.product_variant_id,
                         stock_item_id: r.stock_item_id,
                         quantity: r.quantity,
-                        stock_unit_on_creation: r.stock_unit_on_creation,
                     })
                     .collect();
 
@@ -558,7 +550,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                         primary_thumbnail_url: v.primary_thumbnail_url,
                         additional_thumbnail_urls: v.additional_thumbnail_urls,
                         price_base_standard_usd: v.price_base_standard_usd,
-                        pbx_sku: format!("PBX{}", v.pbx_sku),
+                        pbx_sku: format!("NDX{}", v.pbx_sku),
                     })
                     .collect(),
                 product_variant_stock_item_relations: if is_edit_mode { Some(outgoing_relations) } else { None },
@@ -1020,7 +1012,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                                         value: variant.pbx_sku.clone(),
                                                         placeholder: "9999",
                                                         optional: false,
-                                                        prefix: "PBX",
+                                                        prefix: "NDX",
                                                         oninput: move |event: FormEvent| {
                                                             variants.with_mut(|v| {
                                                                 if let Some(variant) = v.get_mut(index) {
@@ -1070,7 +1062,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                                                                     }
                                                                                     div {
                                                                                         class: "text-xs text-gray-500",
-                                                                                        "SKU: {stock_item.pbi_sku} • Qty: {relation.quantity} {relation.stock_unit_on_creation}"
+                                                                                        "SKU: {stock_item.pbi_sku} • Qty: {relation.quantity}"
                                                                                     }
                                                                                 }
                                                                             }
@@ -1214,23 +1206,19 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                         },
 
                                         if !selected_stock_item_id().is_empty() {
-                                            if let Some(Ok(all_stock_items)) = stock_items.read().as_ref() {
-                                                if let Some(selected_item) = all_stock_items.iter().find(|item| item.id == selected_stock_item_id()) {
-                                                    div {
-                                                        label {
-                                                            class: "block text-sm font-medium text-gray-700 mb-1",
-                                                            "Quantity ({selected_item.unit})"
-                                                        },
-                                                        input {
-                                                            r#type: "number",
-                                                            step: if selected_item.unit == StockUnit::Multiples { "1" } else { "0.01" },
-                                                            min: if selected_item.unit == StockUnit::Multiples { "1" } else { "0.01" },
-                                                            class: "w-full border border-gray-300 rounded-md px-3 py-2 text-sm",
-                                                            value: stock_quantity(),
-                                                            placeholder: if selected_item.unit == StockUnit::Multiples { "1" } else { "1.00" },
-                                                            oninput: move |e| stock_quantity.set(e.value())
-                                                        }
-                                                    }
+                                            div {
+                                                label {
+                                                    class: "block text-sm font-medium text-gray-700 mb-1",
+                                                    "Quantity (units)"
+                                                },
+                                                input {
+                                                    r#type: "number",
+                                                    step: "1",
+                                                    min: "1",
+                                                    class: "w-full border border-gray-300 rounded-md px-3 py-2 text-sm",
+                                                    value: stock_quantity(),
+                                                    placeholder: "1",
+                                                    oninput: move |e| stock_quantity.set(e.value())
                                                 }
                                             }
                                         }

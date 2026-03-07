@@ -1,4 +1,3 @@
-use super::sea_orm_active_enums::StockUnit;
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
@@ -14,17 +13,14 @@ pub struct Model {
     pub description: Option<String>,
     #[sea_orm(column_name = "thumbnailRef", column_type = "Text", nullable)]
     pub thumbnail_ref: Option<String>,
-    pub unit: StockUnit,
     #[sea_orm(column_name = "assemblyMinutes", nullable)]
     pub assembly_minutes: Option<i32>,
     #[sea_orm(column_name = "defaultShippingDays", nullable)]
     pub default_shipping_days: Option<i32>,
     #[sea_orm(column_name = "defaultCost", column_type = "Double", nullable)]
     pub default_cost: Option<f64>,
-    #[sea_orm(column_name = "warningQuantity", column_type = "Double", nullable)]
-    pub warning_quantity: Option<f64>,
-    #[sea_orm(column_name = "isContainer")]
-    pub is_container: bool,
+    #[sea_orm(column_name = "warningQuantity", nullable)]
+    pub warning_quantity: Option<i32>,
     #[sea_orm(column_name = "createdAt")]
     pub created_at: DateTime,
     #[sea_orm(column_name = "updatedAt")]
@@ -34,8 +30,7 @@ pub struct Model {
 #[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
     ProductVariantStockItemRelations,
-    StockBatches,
-    StockItemRelations,
+    StockLocationQuantities,
     StockBackorderActiveReduce,
     StockPreorderActiveReduce,
 }
@@ -46,9 +41,8 @@ impl RelationTrait for Relation {
             Self::ProductVariantStockItemRelations => {
                 Entity::has_many(super::product_variant_stock_item_relations::Entity).into()
             }
-            Self::StockBatches => Entity::has_many(super::stock_batches::Entity).into(),
-            Self::StockItemRelations => {
-                Entity::has_many(super::stock_item_relations::Entity).into()
+            Self::StockLocationQuantities => {
+                Entity::has_many(super::stock_location_quantities::Entity).into()
             }
             Self::StockBackorderActiveReduce => {
                 Entity::has_many(super::stock_backorder_active_reduce::Entity).into()
@@ -66,15 +60,9 @@ impl Related<super::product_variant_stock_item_relations::Entity> for Entity {
     }
 }
 
-impl Related<super::stock_batches::Entity> for Entity {
+impl Related<super::stock_location_quantities::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::StockBatches.def()
-    }
-}
-
-impl Related<super::stock_item_relations::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::StockItemRelations.def()
+        Relation::StockLocationQuantities.def()
     }
 }
 

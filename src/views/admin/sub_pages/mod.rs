@@ -4,6 +4,9 @@ pub use admin_create_product::*;
 pub mod admin_create_stock_item;
 pub use admin_create_stock_item::*;
 
+pub mod admin_create_stock_location;
+pub use admin_create_stock_location::*;
+
 pub mod admin_create_discount;
 pub use admin_create_discount::*;
 
