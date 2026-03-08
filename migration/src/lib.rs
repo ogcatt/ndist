@@ -56,6 +56,7 @@ mod add_access_groups;
 mod add_stock_locations;
 mod add_stock_location_enabled;
 mod add_store_settings;
+mod add_access_users;
 
 pub struct Migrator;
 
@@ -122,6 +123,7 @@ impl MigratorTrait for Migrator {
             Box::new(add_stock_locations::Migration),
             Box::new(add_stock_location_enabled::Migration),
             Box::new(add_store_settings::Migration),
+            Box::new(add_access_users::Migration),
         ]
     }
 }

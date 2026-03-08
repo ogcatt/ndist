@@ -232,6 +232,7 @@ fn convert_product_internal(
         mechanism: model.mechanism,
         metadata: model.metadata,
         access_groups: model.access_groups,
+        access_users: model.access_users,
         show_private_preview: model.show_private_preview,
         variants: context.variants,
     }

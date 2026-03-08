@@ -88,6 +88,8 @@ pub struct Model {
     pub back_order: bool, // default: false
     #[sea_orm(nullable)]
     pub access_groups: Option<Vec<String>>,
+    #[sea_orm(column_name = "access_users", nullable)]
+    pub access_users: Option<Vec<String>>,
     //#[sea_orm(column_name = "show_private_preview")]
     pub show_private_preview: bool, // default: false
 }
@@ -101,6 +103,10 @@ impl Model {
 
     pub fn get_access_groups(&self) -> Vec<String> {
         self.access_groups.clone().unwrap_or_default()
+    }
+
+    pub fn get_access_users(&self) -> Vec<String> {
+        self.access_users.clone().unwrap_or_default()
     }
 }
 

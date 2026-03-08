@@ -87,6 +87,8 @@ pub struct Product {
     pub metadata: Option<String>,
     // If not null only these groups can access and purchase this product
     pub access_groups: Option<Vec<String>>,
+    // If not null only these specific user IDs can access and purchase this product (in addition to any access_groups)
+    pub access_users: Option<Vec<String>>,
     // If this is true then even if the product is gated to specific groups it shows a bare preview on home/product browser
     pub show_private_preview: bool,
 

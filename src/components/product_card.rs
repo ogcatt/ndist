@@ -62,8 +62,9 @@ pub fn ProductCard(
     // Unwrap the product since we know it exists at this point
     let product = product.unwrap();
 
-    // Check if product is gated (has access_groups)
-    let is_gated = product.access_groups.as_ref().map_or(false, |groups| !groups.is_empty());
+    // Check if product is gated (has access_groups or access_users)
+    let is_gated = product.access_groups.as_ref().map_or(false, |groups| !groups.is_empty())
+        || product.access_users.as_ref().map_or(false, |users| !users.is_empty());
 
     // Use cached session info for faster access checks
     let session_signal = use_stale_while_revalidate(
@@ -74,21 +75,20 @@ pub fn ProductCard(
 
     let session_state = session_signal.read();
 
-    // Check if user has access based on session group membership
+    // Check if user has access based on session group/user membership
     let user_has_access = if is_gated {
         if let Some(session) = session_state.as_ref() {
-            // User has access if any of their group IDs match the product's access groups
-            product.access_groups
-                .as_ref()
+            let in_users = product.access_users.as_ref()
+                .map_or(false, |users| users.contains(&session.user_id));
+            let in_groups = product.access_groups.as_ref()
                 .map_or(false, |access_groups| {
                     session.group_ids.iter().any(|group_id| access_groups.contains(group_id))
-                })
+                });
+            in_users || in_groups
         } else {
-            // No session - no access to gated product
             false
         }
     } else {
-        // Product is not gated - everyone has access
         true
     };
 
@@ -457,8 +457,9 @@ pub fn WideProductCard(
     // Unwrap the product since we know it exists at this point
     let product = product.unwrap();
 
-    // Check if product is gated (has access_groups)
-    let is_gated = product.access_groups.as_ref().map_or(false, |groups| !groups.is_empty());
+    // Check if product is gated (has access_groups or access_users)
+    let is_gated = product.access_groups.as_ref().map_or(false, |groups| !groups.is_empty())
+        || product.access_users.as_ref().map_or(false, |users| !users.is_empty());
 
     // Use cached session info for faster access checks
     let session_signal = use_stale_while_revalidate(
@@ -469,21 +470,20 @@ pub fn WideProductCard(
 
     let session_state = session_signal.read();
 
-    // Check if user has access based on session group membership
+    // Check if user has access based on session group/user membership
     let user_has_access = if is_gated {
         if let Some(session) = session_state.as_ref() {
-            // User has access if any of their group IDs match the product's access groups
-            product.access_groups
-                .as_ref()
+            let in_users = product.access_users.as_ref()
+                .map_or(false, |users| users.contains(&session.user_id));
+            let in_groups = product.access_groups.as_ref()
                 .map_or(false, |access_groups| {
                     session.group_ids.iter().any(|group_id| access_groups.contains(group_id))
-                })
+                });
+            in_users || in_groups
         } else {
-            // No session - no access to gated product
             false
         }
     } else {
-        // Product is not gated - everyone has access
         true
     };
 

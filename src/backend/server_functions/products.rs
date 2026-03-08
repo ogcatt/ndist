@@ -77,6 +77,7 @@ pub struct CreateEditProductRequest {
     pub priority: Option<i32>,
     pub back_order: bool,
     pub access_groups: Vec<String>,
+    pub access_users: Vec<String>,
     pub show_private_preview: bool,
     pub variants: Vec<CreateEditProductVariantRequest>,
     pub product_variant_stock_item_relations: Option<Vec<ProductVariantStockItemRelation>>,
@@ -114,6 +115,8 @@ async fn get_user_group_ids(user_id: &str) -> Result<HashSet<String>, ServerFnEr
 #[cfg(feature = "server")]
 fn user_has_product_access(
     product_access_groups: &Option<Vec<String>>,
+    product_access_users: &Option<Vec<String>>,
+    user_id: Option<&str>,
     user_group_ids: &HashSet<String>,
     is_admin: bool,
 ) -> bool {
@@ -122,18 +125,27 @@ fn user_has_product_access(
         return true;
     }
 
-    // If no access groups specified, product is accessible to all
-    let Some(access_groups) = product_access_groups else {
-        return true;
-    };
+    let groups = product_access_groups.as_deref().unwrap_or(&[]);
+    let users = product_access_users.as_deref().unwrap_or(&[]);
 
-    // If access_groups is empty, treat as accessible to all
-    if access_groups.is_empty() {
+    // If neither restriction is set, product is accessible to all
+    if groups.is_empty() && users.is_empty() {
         return true;
     }
 
-    // User must be in at least one of the access groups
-    access_groups.iter().any(|ag| user_group_ids.contains(ag))
+    // Check user-level access first (direct allowlist)
+    if let Some(uid) = user_id {
+        if users.iter().any(|u| u == uid) {
+            return true;
+        }
+    }
+
+    // Check group-level access
+    if !groups.is_empty() {
+        return groups.iter().any(|ag| user_group_ids.contains(ag));
+    }
+
+    false
 }
 
 #[cfg(feature = "server")]
@@ -195,6 +207,7 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
 
     let user = user_result?;
     let is_admin = check_admin_permission().await.unwrap_or(false);
+    let user_id = user.as_ref().map(|u| u.id.as_str());
 
     // Get user's group memberships
     let user_group_ids = if let Some(ref user) = user {
@@ -236,7 +249,7 @@ pub async fn get_products() -> Result<Vec<Product>, ServerFnError> {
     let filtered_products: Vec<Product> = products
         .into_iter()
         .filter_map(|product| {
-            let has_access = user_has_product_access(&product.access_groups, &user_group_ids, is_admin);
+            let has_access = user_has_product_access(&product.access_groups, &product.access_users, user_id, &user_group_ids, is_admin);
 
             if has_access {
                 // User has full access
@@ -302,8 +315,9 @@ pub async fn get_product_by_handle(handle: String) -> Result<Option<Product>, Se
         HashSet::new()
     };
 
-    // Check if user has access to this product based on access_groups
-    let has_access = user_has_product_access(&product_model.access_groups, &user_group_ids, is_admin);
+    // Check if user has access to this product based on access_groups / access_users
+    let user_id = user.as_ref().map(|u| u.id.as_str());
+    let has_access = user_has_product_access(&product_model.access_groups, &product_model.access_users, user_id, &user_group_ids, is_admin);
 
     // For get_product_by_handle, if user doesn't have access, return None
     // (show_private_preview only applies to the list view, not direct access)
@@ -527,6 +541,7 @@ pub async fn admin_create_product(
         mechanism: ActiveValue::NotSet, // Update this later so the UI can pass data to this
         metadata: ActiveValue::NotSet,
         access_groups: ActiveValue::Set(if request.access_groups.is_empty() { None } else { Some(request.access_groups) }),
+        access_users: ActiveValue::Set(if request.access_users.is_empty() { None } else { Some(request.access_users) }),
         show_private_preview: ActiveValue::Set(request.show_private_preview),
         created_at: ActiveValue::Set(now),
         updated_at: ActiveValue::Set(now),
@@ -724,6 +739,7 @@ pub async fn admin_edit_product(
         priority: ActiveValue::Set(request.priority),
         back_order: ActiveValue::Set(request.back_order),
         access_groups: ActiveValue::Set(if request.access_groups.is_empty() { None } else { Some(request.access_groups) }),
+        access_users: ActiveValue::Set(if request.access_users.is_empty() { None } else { Some(request.access_users) }),
         show_private_preview: ActiveValue::Set(request.show_private_preview),
         updated_at: ActiveValue::Set(now),
         ..Default::default()

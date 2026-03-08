@@ -159,6 +159,7 @@ pub struct SupabaseTokenClaims {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SessionInfo {
     pub authenticated: bool,
+    pub user_id: String,
     pub email: String,
     pub name: String,
     pub admin: bool,
@@ -649,6 +650,7 @@ pub async fn get_session_info() -> Result<SessionInfo, ServerFnError> {
 
             Ok(SessionInfo {
                 authenticated: true,
+                user_id: user.id,
                 email: user.email,
                 name: user.name,
                 admin: user.admin,
@@ -657,6 +659,7 @@ pub async fn get_session_info() -> Result<SessionInfo, ServerFnError> {
         },
         _ => Ok(SessionInfo {
             authenticated: false,
+            user_id: String::new(),
             email: String::new(),
             name: String::new(),
             admin: false,

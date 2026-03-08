@@ -39,6 +39,8 @@ use uuid::Uuid;
 use super::super::front_entities::*;
 
 #[cfg(feature = "server")]
+use super::auth::get_current_user;
+#[cfg(feature = "server")]
 use super::discounts::check_discount;
 #[cfg(feature = "server")]
 use super::stock_calculations::StockCalculationError;
@@ -750,6 +752,53 @@ async fn set_basket_id_cookie(basket_id: String) -> Result<(), CookieError> {
     Ok(())
 }
 
+/// Returns true if the current user is allowed to purchase the given product.
+/// A product with no access restrictions is open to all.
+/// A restricted product requires the user to be authenticated and either:
+///   - directly listed in access_users, or
+///   - a member of at least one allowed group in access_groups.
+#[cfg(feature = "server")]
+async fn user_has_product_access(product: &products::Model) -> Result<bool, ServerFnError> {
+    let restricted_groups = product.get_access_groups();
+    let restricted_users = product.get_access_users();
+
+    // No restriction — everyone can access
+    if restricted_groups.is_empty() && restricted_users.is_empty() {
+        return Ok(true);
+    }
+
+    // Restricted — must be authenticated
+    let user = get_current_user().await?;
+    let user = match user {
+        Some(u) => u,
+        None => return Ok(false),
+    };
+
+    // Check direct user access first
+    if restricted_users.iter().any(|u| u == &user.id) {
+        return Ok(true);
+    }
+
+    if restricted_groups.is_empty() {
+        return Ok(false);
+    }
+
+    let db = get_db().await;
+
+    // Fetch the user's group memberships
+    let memberships = entity::group_members::Entity::find()
+        .filter(entity::group_members::Column::UserId.eq(&user.id))
+        .all(db)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    let user_group_ids: std::collections::HashSet<String> =
+        memberships.into_iter().map(|m| m.group_id).collect();
+
+    // Allow if any of the product's required groups matches the user's groups
+    Ok(restricted_groups.iter().any(|g| user_group_ids.contains(g)))
+}
+
 #[server]
 pub async fn add_or_update_basket_item(
     variant_id: String,
@@ -823,6 +872,16 @@ pub async fn add_or_update_basket_item(
     }
 
     let parent_product = parent_product.expect("Parent product should exist if variant exists");
+
+    // Group access check — reject if product is restricted to groups the user isn't in
+    if !user_has_product_access(&parent_product).await? {
+        let basket = get_or_create_basket().await?;
+        return Ok(AddToBasketResponse {
+            status: "AccessDenied".to_string(),
+            basket,
+        });
+    }
+
     let is_back_order = parent_product.back_order;
     let is_pre_order = parent_product.pre_order;
 
@@ -1236,6 +1295,16 @@ pub async fn set_basket_item_quantity(
     }
 
     let parent_product = parent_product.expect("Parent product should exist if variant exists");
+
+    // Group access check — reject if product is restricted to groups the user isn't in
+    if !user_has_product_access(&parent_product).await? {
+        let basket = get_or_create_basket().await?;
+        return Ok(AddToBasketResponse {
+            status: "AccessDenied".to_string(),
+            basket,
+        });
+    }
+
     let is_back_order = parent_product.back_order;
     let is_pre_order = parent_product.pre_order;
 

@@ -10,6 +10,7 @@ use crate::backend::server_functions::{
     admin_create_product, admin_edit_product, admin_upload_thumbnails,
     admin_get_products, admin_get_product_variant_stock_item_relations,
     admin_get_stock_items, admin_get_groups,
+    admin_search_users, admin_get_user_by_id, SearchUsersRequest, UserSearchResult,
 };
 use crate::components::*;
 
@@ -101,8 +102,11 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
     let mut back_order = use_signal(|| false);
 
     let mut access_groups: Signal<Vec<String>> = use_signal(|| vec![]);
+    let mut access_users: Signal<Vec<UserSearchResult>> = use_signal(|| vec![]);
     let mut show_private_preview = use_signal(|| false);
     let mut group_search = use_signal(|| String::new());
+    let mut user_search = use_signal(|| String::new());
+    let mut user_search_results: Signal<Vec<UserSearchResult>> = use_signal(|| vec![]);
 
     let mut physical_description = use_signal(|| String::new());
     let mut plabs_node_id = use_signal(|| String::new());
@@ -129,6 +133,9 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
     // Stock Item Relations (live UI list) - only for edit mode
     let mut variant_stock_relations: Signal<Vec<UiVariantStockRelation>> = use_signal(|| vec![]);
     let mut initial_relations: Signal<Vec<UiVariantStockRelation>> = use_signal(|| vec![]);
+
+    // Snapshot of form state when product is loaded (for dirty-state detection in edit mode)
+    let mut initial_snapshot: Signal<String> = use_signal(|| String::new());
 
     // States for adding new stock item relations
     let mut show_add_stock_modal: Signal<Option<usize>> = use_signal(|| None);
@@ -188,6 +195,20 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                 priority.set(product.priority.map(|p| p.to_string()).unwrap_or_default());
                 back_order.set(product.back_order);
                 access_groups.set(product.access_groups.clone().unwrap_or_default());
+                let ids = product.access_users.clone().unwrap_or_default();
+                if !ids.is_empty() {
+                    spawn(async move {
+                        let mut resolved = Vec::new();
+                        for id in ids {
+                            if let Ok(Some(user)) = admin_get_user_by_id(id.clone()).await {
+                                resolved.push(UserSearchResult { id: user.id, email: user.email, name: user.name });
+                            } else {
+                                resolved.push(UserSearchResult { id: id.clone(), email: id.clone(), name: id });
+                            }
+                        }
+                        access_users.set(resolved);
+                    });
+                }
                 show_private_preview.set(product.show_private_preview);
 
                 physical_description.set(product.physical_description.clone().unwrap_or_default());
@@ -231,6 +252,40 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                     .unwrap_or_default();
 
                 variants.set(edit_variants);
+
+                // Take a snapshot of the form state so we can detect dirty changes
+                let snap = format!(
+                    "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}|{:?}|{:?}",
+                    product.title,
+                    product.handle,
+                    product.subtitle.as_deref().unwrap_or(""),
+                    product.small_description_md.as_deref().unwrap_or(""),
+                    product.visibility,
+                    product.product_form,
+                    product.force_no_stock,
+                    product.pre_order,
+                    product.pre_order_goal.map(|g| g.to_string()).unwrap_or_default(),
+                    product.back_order,
+                    product.show_private_preview,
+                    product.brand.as_deref().unwrap_or(""),
+                    product.priority.map(|p| p.to_string()).unwrap_or_default(),
+                    product.purity.map(|p| p.to_string()).unwrap_or_default(),
+                    product.cas.as_deref().unwrap_or(""),
+                    product.iupac.as_deref().unwrap_or(""),
+                    product.smiles.as_deref().unwrap_or(""),
+                    product.weight.unwrap_or(0.0),
+                    product.physical_description.as_deref().unwrap_or(""),
+                    product.analysis_url_qnmr.as_deref().unwrap_or(""),
+                    product.analysis_url_hplc.as_deref().unwrap_or(""),
+                    product.analysis_url_qh1.as_deref().unwrap_or(""),
+                    product.enable_render_if_smiles,
+                    product.main_description_md.as_deref().unwrap_or(""),
+                    product.access_groups.as_deref().unwrap_or(&[]),
+                    product.access_users.as_deref().unwrap_or(&[]),
+                    product.phase,
+                );
+                initial_snapshot.set(snap);
+
                 loading.set(false);
             } else {
                 current_product.set(None);
@@ -490,6 +545,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                 },
                 back_order: back_order(),
                 access_groups: access_groups(),
+                access_users: access_users().iter().map(|u| u.id.clone()).collect(),
                 show_private_preview: show_private_preview(),
                 physical_description: if physical_description().trim().is_empty() {
                     None
@@ -601,6 +657,23 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                         if is_edit_mode {
                             real_title.set(title().clone());
                             initial_relations.set(variant_stock_relations());
+                            // Reset snapshot so button becomes gray again after save
+                            let new_snap = format!(
+                                "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}|{:?}|{:?}",
+                                title(), handle(), subtitle(), short_description(),
+                                visibility(), product_form(),
+                                force_no_stock(), pre_order(), pre_order_goal(),
+                                back_order(), show_private_preview(),
+                                brand(), priority(), purity_standard(),
+                                cas(), iupac(), smiles(), weight(),
+                                physical_description(),
+                                analysis_url_qnmr(), analysis_url_hplc(), analysis_url_qh1(),
+                                enable_render_if_smiles(), long_description(),
+                                access_groups.read().as_slice(),
+                                access_users.read().iter().map(|u| u.id.clone()).collect::<Vec<_>>().as_slice(),
+                                phase(),
+                            );
+                            initial_snapshot.set(new_snap);
                         } else {
                             // Reset form on successful create
                             title.set(String::new());
@@ -802,18 +875,58 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                         "Create New Product"
                     }
                 },
-                button {
-                    class: format!("text-sm px-3 py-2 text-white rounded transition-colors {}",
-                        if saving() { "bg-gray-500 cursor-not-allowed" } else {
-                            if is_edit_mode { "bg-blue-600 hover:bg-blue-700" } else { "bg-gray-900 hover:bg-gray-800" }
-                        }
-                    ),
-                    disabled: saving(),
-                    onclick: handle_save_product,
-                    if saving() {
-                        "Saving..."
+                {
+                    let is_dirty = if is_edit_mode {
+                        let current = format!(
+                            "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}|{:?}|{:?}",
+                            title(),
+                            handle(),
+                            subtitle(),
+                            short_description(),
+                            visibility(),
+                            product_form(),
+                            force_no_stock(),
+                            pre_order(),
+                            pre_order_goal(),
+                            back_order(),
+                            show_private_preview(),
+                            brand(),
+                            priority(),
+                            purity_standard(),
+                            cas(),
+                            iupac(),
+                            smiles(),
+                            weight(),
+                            physical_description(),
+                            analysis_url_qnmr(),
+                            analysis_url_hplc(),
+                            analysis_url_qh1(),
+                            enable_render_if_smiles(),
+                            long_description(),
+                            access_groups.read().as_slice(),
+                            access_users.read().iter().map(|u| u.id.clone()).collect::<Vec<_>>().as_slice(),
+                            phase(),
+                        );
+                        current != initial_snapshot()
                     } else {
-                        if is_edit_mode { "Save Changes" } else { "Create" }
+                        true
+                    };
+                    rsx! {
+                        button {
+                            class: format!("text-sm px-3 py-2 text-white rounded transition-colors {}",
+                                if saving() { "bg-gray-500 cursor-not-allowed" }
+                                else if !is_dirty { "bg-gray-300 cursor-not-allowed" }
+                                else if is_edit_mode { "bg-blue-600 hover:bg-blue-700" }
+                                else { "bg-gray-900 hover:bg-gray-800" }
+                            ),
+                            disabled: saving() || !is_dirty,
+                            onclick: handle_save_product,
+                            if saving() {
+                                "Saving..."
+                            } else {
+                                if is_edit_mode { "Save Changes" } else { "Create" }
+                            }
+                        }
                     }
                 }
             }
@@ -982,6 +1095,104 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                             }
                                         } else {
                                             rsx! {}
+                                        }
+                                    } else {
+                                        rsx! {}
+                                    }
+                                }
+                            }
+
+                            // Access Users
+                            div {
+                                div { class: "text-xs font-medium text-gray-700 pb-1", "Access Users" }
+
+                                // Selected user chips
+                                if !access_users.read().is_empty() {
+                                    div {
+                                        class: "flex flex-wrap gap-1 mb-2",
+                                        for user in access_users.read().clone() {
+                                            {
+                                                let uid = user.id.clone();
+                                                let display = if user.name == user.id {
+                                                    user.id.clone()
+                                                } else {
+                                                    format!("{} ({})", user.name, user.email)
+                                                };
+                                                rsx! {
+                                                    div {
+                                                        class: "flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full",
+                                                        span { "{display}" }
+                                                        button {
+                                                            class: "ml-1 text-green-600 hover:text-green-900 font-bold",
+                                                            onclick: move |_| {
+                                                                let uid2 = uid.clone();
+                                                                access_users.with_mut(|us| us.retain(|u| u.id != uid2));
+                                                            },
+                                                            "×"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // User search input
+                                input {
+                                    r#type: "text",
+                                    class: "w-full border border-gray-200 rounded-md px-3 py-2 text-sm",
+                                    placeholder: "Search users by name or email...",
+                                    value: "{user_search}",
+                                    oninput: move |e| {
+                                        let query = e.value();
+                                        user_search.set(query.clone());
+                                        if query.trim().is_empty() {
+                                            user_search_results.set(vec![]);
+                                            return;
+                                        }
+                                        spawn(async move {
+                                            if let Ok(resp) = admin_search_users(SearchUsersRequest {
+                                                query,
+                                                exclude_group_id: None,
+                                            }).await {
+                                                if resp.success {
+                                                    let selected_ids: Vec<String> = access_users.read().iter().map(|u| u.id.clone()).collect();
+                                                    let filtered: Vec<UserSearchResult> = resp.users.into_iter().filter(|u| !selected_ids.contains(&u.id)).collect();
+                                                    user_search_results.set(filtered);
+                                                }
+                                            }
+                                        });
+                                    },
+                                }
+
+                                // User search results dropdown
+                                {
+                                    let results = user_search_results.read().clone();
+                                    if !results.is_empty() {
+                                        rsx! {
+                                            div {
+                                                class: "border border-gray-200 rounded-md mt-1 max-h-40 overflow-y-auto",
+                                                for result in results {
+                                                    {
+                                                        let u = result.clone();
+                                                        rsx! {
+                                                            div {
+                                                                class: "px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0",
+                                                                onclick: move |_| {
+                                                                    let u2 = u.clone();
+                                                                    access_users.with_mut(|us| {
+                                                                        if !us.iter().any(|x| x.id == u2.id) { us.push(u2); }
+                                                                    });
+                                                                    user_search.set(String::new());
+                                                                    user_search_results.set(vec![]);
+                                                                },
+                                                                span { class: "font-medium", "{result.name}" }
+                                                                span { class: "text-gray-500 ml-1", "({result.email})" }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     } else {
                                         rsx! {}
