@@ -655,7 +655,7 @@ pub fn Collection(codename: ReadOnlySignal<String>) -> Element {
                                             { t!("no-products-found-etc")},
                                             " ",
                                             Link {
-                                                to: Route::Collections { },
+                                                to: Route::Collection { codename: String::from("all") },
                                                 class: "a",
                                                 { t!("view-all-collections") }
                                             },
@@ -688,7 +688,7 @@ pub fn Collection(codename: ReadOnlySignal<String>) -> Element {
                                             { t!("no-products-found-etc")},
                                             " ",
                                             Link {
-                                                to: Route::Collections { },
+                                                to: Route::Collection { codename: String::from("all") },
                                                 class: "a",
                                                 { t!("view-all-collections") }
                                             },
@@ -724,7 +724,7 @@ pub fn Collection(codename: ReadOnlySignal<String>) -> Element {
                         div {
                             class: "mt-3",
                             Link {
-                                to: Route::Collections {},
+                                to: Route::Collection { codename: String::from("all") },
                                 class: "a",
                                 { t!("view-all-collections") }
                             }

@@ -141,6 +141,11 @@ pub fn calculate_variant_stock_quantities(
     for product in &mut products {
         if let Some(ref mut variants) = product.variants {
             for variant in variants.iter_mut() {
+                let has_relations = variant_relations
+                    .get(&variant.id)
+                    .map(|r| !r.is_empty())
+                    .unwrap_or(false);
+                variant.has_stock_relations = has_relations;
                 variant.calculated_stock_quantity = Some(calculate_variant_available_stock(
                     &variant.id,
                     &variant_relations,

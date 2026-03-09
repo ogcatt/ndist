@@ -1061,7 +1061,7 @@ pub fn Cart() -> Element {
                     div { class: "",
                         /*h1 { class: "text-2xl md:text-3xl font-medium", {t!("cart")} }*/
                         p { class: "text-ui-fg-subtle mt-4", {t!("cart-empty-msg")} }
-                        Link { class: "mt-4 text-bbase flex gap-x-1 items-center group", to: Route::Collections {},
+                        Link { class: "mt-4 text-bbase flex gap-x-1 items-center group", to: Route::Collection { codename: String::from("all") },
                             p { class: "font-normal font-sans txt-medium text-ui-fg-interactive", {t!("explore-products")} }
                             svg { xmlns: "http://www.w3.org/2000/svg", width: "20", height: "20", fill: "none", class: "group-hover:rotate-45 ease-in-out duration-200",
                                 path { stroke: "var(--text-ui-fg-interactive)", stroke_linecap: "round", stroke_linejoin: "round", stroke_width: "1.5", d: "m5.75 14.25 8.5-8.5m0 0h-7.5m7.5 0v7.5" }

@@ -284,6 +284,7 @@ pub fn convert_product_variants(
             price_standard_without_sale: variant.price_standard_without_sale,
             additional_thumbnail_urls: variant.additional_thumbnail_urls,
             calculated_stock_quantity: None,
+            has_stock_relations: false,
             created_at: variant.created_at,
             updated_at: variant.updated_at,
         })

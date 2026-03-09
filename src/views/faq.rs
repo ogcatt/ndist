@@ -38,18 +38,6 @@ pub fn Faq() -> Element {
     let faqs_products = use_memo(move || {
         vec![
             FaqItem {
-                question: t!("faq-prod-q1"),
-                answer: t!("faq-prod-a1"),
-            },
-            FaqItem {
-                question: t!("faq-prod-q2"),
-                answer: t!("faq-prod-a2"),
-            },
-            FaqItem {
-                question: t!("faq-prod-q3"),
-                answer: t!("faq-prod-a3"),
-            },
-            FaqItem {
                 question: t!("faq-prod-q4"),
                 answer: t!("faq-prod-a4"),
             },
@@ -60,10 +48,6 @@ pub fn Faq() -> Element {
             FaqItem {
                 question: t!("faq-prod-q6"),
                 answer: t!("faq-prod-a6"),
-            },
-            FaqItem {
-                question: t!("faq-prod-q7"),
-                answer: t!("faq-prod-a7"),
             },
             FaqItem {
                 question: t!("faq-prod-q8"),
@@ -91,16 +75,8 @@ pub fn Faq() -> Element {
                 answer: t!("faq-misc-a3"),
             },
             FaqItem {
-                question: t!("faq-misc-q4"),
-                answer: t!("faq-misc-a4"),
-            },
-            FaqItem {
                 question: t!("faq-misc-q5"),
                 answer: t!("faq-misc-a5"),
-            },
-            FaqItem {
-                question: t!("faq-misc-q6"),
-                answer: t!("faq-misc-a6"),
             },
         ]
     });

@@ -301,7 +301,7 @@ pub fn PeptideCalculator() -> Element {
 
                     // Result display
                     h2 {
-                        class: "mt-8 md:mt-6 text-xl md:text-2xl",
+                        class: "mt-8 md:mt-6 mb-4 text-xl md:text-2xl",
                         { format!("{} ", t!("result-text-part1")) }
                         if !sample_mg().is_empty() {
                             "{sample_mg()} mg"
@@ -343,12 +343,12 @@ pub fn PeptideCalculator() -> Element {
                         }
                         if calculate_result().is_some() {
                             div {
-                                class: "bg-blue-300 opacity-75 h-12",
+                                class: "opacity-75 h-12",
                                 style: format!(
-                                    "margin-top: -{}px; width: {}%; {}",
+                                    "margin-top: -{}px; width: {}%; background-color: {};",
                                     if vol() == "0.3" { "80" } else { "64" },
                                     calculate_ruler_percentage(),
-                                    if calculate_ruler_percentage() >= 100.0 { "background-color: red !important;" } else { "" }
+                                    if calculate_ruler_percentage() >= 100.0 { "red" } else { "#93c5fd" }
                                 )
                             }
                         }

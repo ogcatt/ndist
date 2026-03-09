@@ -118,6 +118,8 @@ pub struct ProductVariants {
     pub additional_thumbnail_urls: Option<Vec<String>>,
     // Calculated stock quantity value for the client to use (calculated from linked stock items)
     pub calculated_stock_quantity: Option<i32>,
+    // True if this variant has at least one linked stock item relation
+    pub has_stock_relations: bool,
     // When the Variant was created
     pub created_at: NaiveDateTime,
     // When the variant was last updated

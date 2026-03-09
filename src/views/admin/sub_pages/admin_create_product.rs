@@ -109,6 +109,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
     let mut user_search_results: Signal<Vec<UserSearchResult>> = use_signal(|| vec![]);
 
     let mut physical_description = use_signal(|| String::new());
+    let mut mechanism = use_signal(|| String::new());
     let mut plabs_node_id = use_signal(|| String::new());
     let mut cas = use_signal(|| String::new());
     let mut iupac = use_signal(|| String::new());
@@ -212,6 +213,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                 show_private_preview.set(product.show_private_preview);
 
                 physical_description.set(product.physical_description.clone().unwrap_or_default());
+                mechanism.set(product.mechanism.clone().unwrap_or_default());
                 plabs_node_id.set(product.plabs_node_id.clone().unwrap_or_default());
                 cas.set(product.cas.clone().unwrap_or_default());
                 iupac.set(product.iupac.clone().unwrap_or_default());
@@ -255,7 +257,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
 
                 // Take a snapshot of the form state so we can detect dirty changes
                 let snap = format!(
-                    "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}|{:?}|{:?}",
+                    "{}|{}|{}|{}|{:?}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{:?}|{:?}|{:?}",
                     product.title,
                     product.handle,
                     product.subtitle.as_deref().unwrap_or(""),
@@ -275,6 +277,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                     product.smiles.as_deref().unwrap_or(""),
                     product.weight.unwrap_or(0.0),
                     product.physical_description.as_deref().unwrap_or(""),
+                    product.mechanism.as_deref().unwrap_or(""),
                     product.analysis_url_qnmr.as_deref().unwrap_or(""),
                     product.analysis_url_hplc.as_deref().unwrap_or(""),
                     product.analysis_url_qh1.as_deref().unwrap_or(""),
@@ -560,6 +563,11 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                     None
                 } else {
                     Some(physical_description())
+                },
+                mechanism: if mechanism().trim().is_empty() {
+                    None
+                } else {
+                    Some(mechanism())
                 },
                 plabs_node_id: if plabs_node_id().trim().is_empty() {
                     None
@@ -1758,6 +1766,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                     CSelectItem {
                                         selected: if product_form_type == product_form() { true } else { false },
                                         key: "{product_form_type:?}",
+                                        value: format!("{product_form_type}"),
                                         "{product_form_type.to_string()}"
                                     }
                                 }
@@ -1860,6 +1869,16 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                     value: "{physical_description}",
                                     optional: true,
                                     oninput: move |event: FormEvent| physical_description.set(event.value())
+                                }
+                            },
+                            div {
+                                class: "w-full",
+                                CTextBox {
+                                    label: "Mechanism",
+                                    placeholder: "NMDA PAM, GH Secretagogue...",
+                                    value: "{mechanism}",
+                                    optional: true,
+                                    oninput: move |event: FormEvent| mechanism.set(event.value())
                                 }
                             },
                             div {

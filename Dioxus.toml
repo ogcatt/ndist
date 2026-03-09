@@ -23,4 +23,4 @@ script = []
 
 # Javascript code file
 # serve: [dev-server] only
-script = ["assets/dev-hotreload-fix.js"]
+# script = ["assets/dev-hotreload-fix.js"]

@@ -18,6 +18,27 @@
     transition: all 0.3s ease;
 }
 
+.blinking-gray {
+    background-color: #9ca3af;
+    box-shadow: 0px 0px 2.5px 1px #9ca3af;
+    width: 11px;
+    height: 11px;
+    border-radius: 100%;
+}
+
+.banner-img-mobile {
+    display: none;
+}
+
+@media (max-width: 800px) {
+    .banner-img-desktop {
+        display: none;
+    }
+    .banner-img-mobile {
+        display: block;
+    }
+}
+
 .fade-in-image {
     opacity: 0;
     transition: opacity 200ms ease-in-out;

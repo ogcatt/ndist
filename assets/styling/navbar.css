@@ -1,0 +1,61 @@
+/* ── Store navbar dark theme ─────────────────────────────────────
+   Applied when .navbar-dark wraps the sticky nav container.
+   ──────────────────────────────────────────────────────────────── */
+
+/* Main header bar */
+.navbar-dark header {
+    background-color: #000000;
+    border-bottom: none;
+}
+
+/* Nav-level text */
+.navbar-dark nav {
+    color: #d4d4d8;
+}
+.navbar-dark .text-ui-fg-subtle                 { color: #d4d4d8; }
+.navbar-dark .hover\:text-ui-fg-base:hover      { color: #ffffff; }
+
+/* Dropdown menus */
+.navbar-dark .bg-white.rounded-b-md,
+.navbar-dark .bg-white.rounded-r-md,
+.navbar-dark .bg-white.shadow-lg {
+    background-color: #111111;
+    border-color: #2a2a2a;
+}
+.navbar-dark .text-gray-900  { color: #f4f4f5; }
+.navbar-dark .text-gray-700  { color: #d4d4d8; }
+.navbar-dark .text-gray-500  { color: #a1a1aa; }
+.navbar-dark .border-gray-200 { border-color: #2a2a2a; }
+.navbar-dark .border-gray-100 { border-color: #222222; }
+.navbar-dark .hover\:bg-gray-100:hover { background-color: #1c1c1c; }
+.navbar-dark .hover\:bg-gray-50:hover  { background-color: #1c1c1c; }
+
+/* .fadey:hover sets filter:opacity(0.8) which overwrites invert(1) — combine them */
+.navbar-dark header .fadey:hover,
+.navbar-dark .mobile-menu .fadey:hover {
+    filter: invert(1) opacity(0.8);
+}
+
+/* Mobile menu panel */
+.navbar-dark .mobile-menu {
+    background-color: #000000;
+    border-color: #2a2a2a;
+}
+.navbar-dark .mobile-menu .bg-gray-50 { background-color: #111111; }
+.navbar-dark .mobile-menu .border-t-2 { border-top-color: #2a2a2a; }
+
+/* Invert all icons / logo inside the header and mobile menu.
+   No-invert exceptions can be added via class="no-invert". */
+.navbar-dark header img,
+.navbar-dark .mobile-menu img {
+    filter: invert(1);
+}
+.navbar-dark img.no-invert {
+    filter: none;
+}
+
+/* Cart badge — flip to white-on-black becomes black-on-white */
+.navbar-dark .bg-black.text-white {
+    background-color: #ffffff;
+    color: #000000;
+}

@@ -130,6 +130,7 @@ price-not-available = Price not available
 price-per-single-item = Price per single item
 qty-in-stock = {$qty} in Stock
 sold-out = Sold Out
+unstocked = Unstocked
 container-material = Container Material
 product-form = Product Form
 physical-description = Physical Description

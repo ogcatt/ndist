@@ -112,8 +112,13 @@ pub fn ProductCard(
         None
     };
 
-    // Check if out of stock based on variant stock quantities
-    let is_out_of_stock = product.force_no_stock
+    // Unstocked = no stock item relations on all variants (server-populated flag)
+    let is_unstocked = !product.force_no_stock
+        && product.variants.as_ref()
+            .map(|variants| !variants.is_empty() && variants.iter().all(|v| !v.has_stock_relations))
+            .unwrap_or(false);
+    // Out of stock = has relations but quantity <= 0, or force_no_stock
+    let is_out_of_stock = !is_unstocked && (product.force_no_stock
         || product
             .variants
             .as_ref()
@@ -123,16 +128,10 @@ pub fn ProductCard(
                         .iter()
                         .all(|v| v.calculated_stock_quantity.unwrap_or(0) <= 0)
             })
-            .unwrap_or(true);
+            .unwrap_or(true));
 
-    // Helper function to format price without unnecessary .00
     fn format_price(price: f64) -> String {
-        let formatted = format!("${:.2}", price);
-        if formatted.ends_with(".00") {
-            formatted.trim_end_matches(".00").to_string()
-        } else {
-            formatted
-        }
+        format!("${:.2}", price)
     }
 
     // Check if any variant has a discount
@@ -200,21 +199,27 @@ pub fn ProductCard(
                 }
             }
 
-            // Out of stock indicator (only shows if not pre-order, or shows with gray styling if pre-order)
+            // Unstocked indicator (no linked stock items)
+            if is_unstocked {
+                div {
+                    title: "No stock items linked",
+                    style: if product.pre_order { "z-index: 2; top: 44px;" } else { "z-index: 2;" },
+                    class: "rounded-md flex py-0.5 px-1 text-xs absolute right-1.5 top-2 bg-white border-typical border text-black",
+                    div { class: "mr-1 bg-gray-400", style: "border-radius: 50%;height: 12px; width: 12px;margin-top: 2px;" }
+                    span { class: "text-ui-fg-subtle", { t!("unstocked") } }
+                }
+            }
+            // Out of stock indicator
             if is_out_of_stock {
                 div {
                     title: "Out of Stock in all locations",
-                    style: if product.pre_order { "z-index: 2; top: 44px;" } else { "z-index: 2" },
-                    class: "rounded-md flex py-0.5 mt-[-8px] px-1 text-xs absolute right-1.5 bg-white border-typical border text-black",
-
+                    style: if product.pre_order { "z-index: 2; top: 44px;" } else { "z-index: 2;" },
+                    class: "rounded-md flex py-0.5 px-1 text-xs absolute right-1.5 top-2 bg-white border-typical border text-black",
                     div {
-                        class: if product.pre_order { "mr-1 bg-gray-400 mt-[-8px]" } else { "mr-1 bg-orange-400" },
+                        class: if product.pre_order { "mr-1 bg-gray-400" } else { "mr-1 bg-orange-400" },
                         style: "border-radius: 50%;height: 12px; width: 12px;margin-top: 2px;"
                     }
-                    span {
-                        class: "text-ui-fg-subtle",
-                        { t!("sold-out") }
-                    }
+                    span { class: "text-ui-fg-subtle", { t!("sold-out") } }
                 }
             }
 
@@ -502,8 +507,13 @@ pub fn WideProductCard(
         None
     };
 
-    // Check if out of stock based on variant stock quantities
-    let is_out_of_stock = product.force_no_stock
+    // Unstocked = no stock item relations on all variants (server-populated flag)
+    let is_unstocked = !product.force_no_stock
+        && product.variants.as_ref()
+            .map(|variants| !variants.is_empty() && variants.iter().all(|v| !v.has_stock_relations))
+            .unwrap_or(false);
+    // Out of stock = has relations but quantity <= 0, or force_no_stock
+    let is_out_of_stock = !is_unstocked && (product.force_no_stock
         || product
             .variants
             .as_ref()
@@ -513,16 +523,10 @@ pub fn WideProductCard(
                         .iter()
                         .all(|v| v.calculated_stock_quantity.unwrap_or(0) <= 0)
             })
-            .unwrap_or(true);
+            .unwrap_or(true));
 
-    // Helper function to format price without unnecessary .00
     fn format_price(price: f64) -> String {
-        let formatted = format!("${:.2}", price);
-        if formatted.ends_with(".00") {
-            formatted.trim_end_matches(".00").to_string()
-        } else {
-            formatted
-        }
+        format!("${:.2}", price)
     }
 
     // Check if any variant has a discount
@@ -586,6 +590,14 @@ pub fn WideProductCard(
                         }
                     }
 
+                    if is_unstocked {
+                        div {
+                            title: "No stock items linked",
+                            class: "rounded-md flex py-0.5 px-1 text-xs bg-white border-typical border text-black",
+                            div { class: "mr-1 bg-gray-400", style: "border-radius: 50%;height: 12px; width: 12px;margin-top: 2px;" }
+                            span { class: "text-ui-fg-subtle", { t!("unstocked") } }
+                        }
+                    }
                     if is_out_of_stock {
                         div {
                             title: "Out of Stock in all locations",
@@ -775,6 +787,14 @@ pub fn WideProductCard(
                         }
                     }
 
+                    if is_unstocked {
+                        div {
+                            title: "No stock items linked",
+                            class: "rounded-md flex py-0.5 px-1 text-xs bg-white border-typical border text-black",
+                            div { class: "mr-1 bg-gray-400", style: "border-radius: 50%;height: 12px; width: 12px;margin-top: 2px;" }
+                            span { class: "text-ui-fg-subtle", { t!("unstocked") } }
+                        }
+                    }
                     if is_out_of_stock {
                         div {
                             title: "Out of Stock in all locations",

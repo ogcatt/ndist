@@ -95,16 +95,16 @@ pub fn UserDashboard() -> Element {
             // Desktop layout with sidebar
             div { class: "hidden md:flex min-h-screen",
                 // Sidebar - fixed position
-                div { class: "w-64 bg-white border-r border-gray-200 flex flex-col fixed h-screen",
+                div { class: "w-64 bg-black flex flex-col fixed h-screen",
                     // Navigation items - scrollable area
                     div { class: "flex-1 pt-8 overflow-y-auto",
                         nav { class: "space-y-1",
                             // Overview
                             button {
                                 class: if *current_page.read() == DashboardPage::Overview {
-                                    "w-full text-left px-6 py-3 text-sm font-medium text-blue-600 bg-blue-50 border-r-2 border-blue-600"
+                                    "w-full text-left px-6 py-3 text-sm font-medium text-white bg-[#1c1c1c] border-r-2 border-[#404040]"
                                 } else {
-                                    "w-full text-left px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                    "w-full text-left px-6 py-3 text-sm font-medium text-gray-400 hover:bg-[#1c1c1c] hover:text-white"
                                 },
                                 onclick: move |_| current_page.set(DashboardPage::Overview),
                                 "Overview"
@@ -113,9 +113,9 @@ pub fn UserDashboard() -> Element {
                             // Orders
                             button {
                                 class: if *current_page.read() == DashboardPage::Orders {
-                                    "w-full text-left px-6 py-3 text-sm font-medium text-blue-600 bg-blue-50 border-r-2 border-blue-600"
+                                    "w-full text-left px-6 py-3 text-sm font-medium text-white bg-[#1c1c1c] border-r-2 border-[#404040]"
                                 } else {
-                                    "w-full text-left px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                    "w-full text-left px-6 py-3 text-sm font-medium text-gray-400 hover:bg-[#1c1c1c] hover:text-white"
                                 },
                                 onclick: move |_| current_page.set(DashboardPage::Orders),
                                 "Orders"
@@ -124,9 +124,9 @@ pub fn UserDashboard() -> Element {
                             // Settings
                             button {
                                 class: if *current_page.read() == DashboardPage::Settings {
-                                    "w-full text-left px-6 py-3 text-sm font-medium text-blue-600 bg-blue-50 border-r-2 border-blue-600"
+                                    "w-full text-left px-6 py-3 text-sm font-medium text-white bg-[#1c1c1c] border-r-2 border-[#404040]"
                                 } else {
-                                    "w-full text-left px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                    "w-full text-left px-6 py-3 text-sm font-medium text-gray-400 hover:bg-[#1c1c1c] hover:text-white"
                                 },
                                 onclick: move |_| current_page.set(DashboardPage::Settings),
                                 "Settings"
@@ -136,11 +136,11 @@ pub fn UserDashboard() -> Element {
 
                     // Admin Panel link (sticky to bottom) - non-scrollable
                     if session.admin {
-                        div { class: "border-t border-gray-200 p-4 flex-shrink-0",
+                        div { class: "border-t border-gray-800 p-4 flex-shrink-0",
                             a {
                                 href: "/admin/dashboard",
                                 target: "_blank",
-                                class: "flex justify-center mt-[-110px] pr-0.5 items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors",
+                                class: "flex justify-center mt-[-110px] pr-0.5 items-center px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-md hover:bg-gray-500 transition-colors",
                                 { t!("admin-panel") }
                                 img {
                                     class: "ml-2 self-center brightness-0 invert",
@@ -177,12 +177,12 @@ pub fn UserDashboard() -> Element {
                             a {
                                 href: "/admin/dashboard",
                                 target: "_blank",
-                                class: "flex items-center text-blue-600 hover:text-blue-800 text-sm font-medium",
+                                class: "flex items-center text-gray-600 hover:text-gray-800 text-sm font-medium",
                                 { t!("admin-panel") }
                                 img {
                                     class: "ml-1.5 self-center",
                                     src: asset!("/assets/icons/open-outline.svg"),
-                                    style: "height:16px; filter: brightness(0) saturate(100%) invert(38%) sepia(94%) saturate(1965%) hue-rotate(202deg) brightness(95%) contrast(101%);"
+                                    style: "height:16px; filter: brightness(0) saturate(100%) invert(40%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%) contrast(90%);"
                                 }
                             }
                         }
@@ -279,14 +279,6 @@ fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupI
                                     dd { class: "mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2",
                                         "{session.name}"
                                     }
-                                }
-                            }
-                            div { class: "py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6",
-                                dt { class: "text-sm font-medium text-gray-500",
-                                    "Account Status"
-                                }
-                                dd { class: "mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2",
-                                    "Active"
                                 }
                             }
                             if session.admin {

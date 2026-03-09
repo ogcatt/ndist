@@ -14,6 +14,8 @@ use crate::utils::{GLOBAL_CART, countries::*, filter_products};
 
 use crate::components::{AccountButton, AccountMobileButton, AccountPopupProvider, SearchResults};
 
+const NAVBAR_CSS: Asset = asset!("/assets/styling/navbar.css");
+
 #[component]
 pub fn Header() -> Element {
     // Mobile menu state signals
@@ -146,6 +148,7 @@ pub fn Header() -> Element {
     });
 
     rsx! {
+        document::Link { rel: "stylesheet", href: NAVBAR_CSS }
         AccountPopupProvider {
             // Search bar overlay
             if *search_bar_open.read() {
@@ -188,9 +191,9 @@ pub fn Header() -> Element {
             }
 
             div {
-                class: "sticky top-0 inset-x-0 z-50",
+                class: "navbar-dark sticky top-0 inset-x-0 z-50",
                 header {
-                    class: "relative h-18 mx-auto border-b duration-200 bg-white border-ui-border-base",
+                    class: "relative h-18 mx-auto duration-200 bg-white border-ui-border-base",
                     nav {
                         class: "txt-xsmall-plus text-ui-fg-subtle flex items-center justify-between w-full h-full text-smm md:text-sm px-4 md:px-6",
                     // Left section: Logo and Desktop navigation
@@ -230,21 +233,17 @@ pub fn Header() -> Element {
                             // Products dropdown
                             div {
                                 class: "h-full relative group",
-                                Link {
-                                    to: Route::Collections { },
-                                    class: "h-full",
-                                    button {
-                                        class: "mr-5 relative text-nowrap h-full flex items-center transition-all ease-out duration-200 hover:text-ui-fg-base",
-                                        title: t!("browse-products"),
-                                        { t!("products") },
-                                        span {
-                                            style: "margin-top:2px;",
-                                            class: "pl-1.5",
-                                            img {
-                                                src: asset!("/assets/icons/down-arrow.svg"),
-                                                alt: "",
-                                                width: "11"
-                                            }
+                                button {
+                                    class: "mr-5 relative text-nowrap h-full flex items-center transition-all ease-out duration-200 hover:text-ui-fg-base cursor-default",
+                                    title: t!("categories"),
+                                    { t!("categories") },
+                                    span {
+                                        style: "margin-top:2px;",
+                                        class: "pl-1.5",
+                                        img {
+                                            src: asset!("/assets/icons/down-arrow.svg"),
+                                            alt: "",
+                                            width: "11"
                                         }
                                     }
                                 },
@@ -381,6 +380,14 @@ pub fn Header() -> Element {
                                                                                                     div {
                                                                                                         class: "text-xs text-gray-500 mt-1",
                                                                                                         "{subtitle}"
+                                                                                                    }
+                                                                                                } else if let Some(variants) = &product.variants {
+                                                                                                    div {
+                                                                                                        class: "text-xs text-gray-500 mt-1",
+                                                                                                        for (i, variant) in variants.iter().enumerate() {
+                                                                                                            if i != 0 { ", " }
+                                                                                                            "{variant.variant_name}"
+                                                                                                        }
                                                                                                     }
                                                                                                 }
                                                                                             }
@@ -519,7 +526,7 @@ pub fn Header() -> Element {
                                 }
                             },
                             div {
-                                class: "h-full relative group",
+                                class: "h-full relative group hidden",
                                 button {
                                     class: "mr-5 relative text-nowrap h-full flex items-center transition-all ease-out duration-200 hover:text-ui-fg-base cursor-default",
                                     title: t!("research-and-writeups"),
@@ -716,7 +723,7 @@ pub fn Header() -> Element {
                                             mobile_categories_open.set(!mobile_categories_open());
                                         },
                                         class: "w-full text-left py-3 px-4 flex text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-100",
-                                        { t!("products") },
+                                        { t!("categories") },
                                         span {
                                             class: "pl-2 self-center ml-auto",
                                             img {
@@ -909,7 +916,7 @@ pub fn Header() -> Element {
                                         onclick: move |_| {
                                             mobile_research_open.set(!mobile_research_open());
                                         },
-                                        class: "w-full text-left py-3 px-4 flex text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-100",
+                                        class: "hidden w-full text-left py-3 px-4 flex text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-100",
                                         { t!("research") },
                                         span {
                                             class: "pl-2 self-center ml-auto",

@@ -5,7 +5,6 @@ use std::time::Duration;
 
 use strum::IntoEnumIterator;
 
-use crate::Route;
 use crate::backend::cache::use_hybrid_cache;
 use crate::backend::front_entities::Category;
 use crate::backend::server_functions;
@@ -28,13 +27,13 @@ pub fn Home() -> Element {
         Meta {}
 
         div {
-            style: "background-color:#ffffff; background-image: linear-gradient(45deg,#f8f8f8 25%,transparent 25%), linear-gradient(-45deg,#f8f8f8 25%,transparent 25%), linear-gradient(45deg,transparent 75%,#f8f8f8 75%), linear-gradient(-45deg,transparent 75%,#f8f8f8 75%); background-size:25px 25px; background-position:0 0,0 12.5px,12.5px -12.5px,-12.5px 0px;",
+            style: "background-color:#ffffff; background-image: linear-gradient(135deg,#f8f8f8 25%,transparent 25%) -12.5px 0, linear-gradient(225deg,#f8f8f8 25%,transparent 25%) -12.5px 0, linear-gradient(315deg,#f8f8f8 25%,transparent 25%), linear-gradient(45deg,#f8f8f8 25%,transparent 25%); background-size:25px 25px;",
             // Full-width banner outside the content container
             div {
-                class: "w-full overflow-hidden",
+                class: "w-full overflow-hidden banner-img-desktop",
                 style: "height: 50vh;",
                 img {
-                    src: asset!("/assets/images/blank-banner.jpg"),
+                    src: asset!("/assets/images/nd_banner2.avif"),
                     alt: "Banner",
                     class: "w-full h-full",
                     style: "object-fit: cover;",
@@ -42,6 +41,13 @@ pub fn Home() -> Element {
                     decoding: "async",
                     "fetchpriority": "high"
                 }
+            }
+            img {
+                src: asset!("/assets/images/nd_banner2.avif"),
+                alt: "Banner",
+                class: "w-full banner-img-mobile",
+                draggable: "false",
+                decoding: "async"
             }
 
             div {
@@ -105,7 +111,6 @@ pub fn Home() -> Element {
                                     .collect();
                                 let cat_products = sort_products_by_priority(&cat_products);
                                 let label = category.to_string();
-                                let codename = key.clone();
 
                                 if cat_products.is_empty() {
                                     rsx! {}
@@ -114,33 +119,11 @@ pub fn Home() -> Element {
                                         div {
                                             class: "mb-12",
                                             div {
-                                                class: "flex justify-between mb-6",
+                                                class: "mb-6",
                                                 p {
                                                     class: "font-normal font-sans txt-medium",
                                                     style: "font-size: 1.35rem;",
                                                     "{label}"
-                                                }
-                                                Link {
-                                                    class: "flex gap-x-1 items-center group",
-                                                    to: Route::Collection { codename },
-                                                    p {
-                                                        class: "font-normal font-sans txt-medium text-ui-fg-interactive",
-                                                        { t!("view-all") }
-                                                    }
-                                                    svg {
-                                                        xmlns: "http://www.w3.org/2000/svg",
-                                                        width: "20",
-                                                        height: "20",
-                                                        fill: "none",
-                                                        class: "group-hover:rotate-45 ease-in-out duration-200",
-                                                        path {
-                                                            stroke: "var(--text-ui-fg-interactive)",
-                                                            "stroke-linecap": "round",
-                                                            "stroke-linejoin": "round",
-                                                            "stroke-width": "1.5",
-                                                            d: "m5.75 14.25 8.5-8.5m0 0h-7.5m7.5 0v7.5"
-                                                        }
-                                                    }
                                                 }
                                             }
                                             ul {

@@ -365,6 +365,8 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
 
                             // Main Image
                             div {
+                                style: "clip-path: polygon(10px 0%, calc(100% - 10px) 0%, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0% calc(100% - 10px), 0% 10px);",
+                            div {
                                 class: "relative aspect-square overflow-hidden shadow-lg border-ui-border-base border",
 
                                 {
@@ -605,6 +607,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
 
                                 */
                             }
+                            } // end clip-path wrapper
 
                             // Thumbnails Row
                             div {
@@ -617,13 +620,18 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                         let current_variant_idx = *current_variant.read();
                                         if let Some(current_variant) = variants.get(current_variant_idx) {
                                             let has_main_thumbnail = current_variant.thumbnail_url.is_some();
-                                            let has_additional_thumbnails = current_variant.additional_thumbnail_urls
+                                            let additional_count = current_variant.additional_thumbnail_urls
                                                 .as_ref()
-                                                .map(|thumbs| !thumbs.is_empty())
-                                                .unwrap_or(false);
+                                                .map(|thumbs| thumbs.len())
+                                                .unwrap_or(0);
+                                            let smiles_count = if product.smiles.is_some()
+                                                && product.enable_render_if_smiles
+                                                && product.variants.as_ref().map_or(false, |vs| vs.iter().any(|v| v.thumbnail_url.is_some()))
+                                            { 1usize } else { 0usize };
+                                            let total_items = (has_main_thumbnail as usize) + additional_count + smiles_count;
 
-                                            // Only show thumbnails if at least one exists
-                                            if has_main_thumbnail || has_additional_thumbnails {
+                                            // Only show the row when there are multiple images to choose between
+                                            if total_items > 1 {
                                                 rsx! {
                                                     div {
                                                         class: "flex flex-nowrap mt-2 px-1.5", // Removed gap, will use margins instead
@@ -759,10 +767,14 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                     p { { t!("pre-order") } }
                                                 }
                                             } else if let Some(qty) = current_variant.calculated_stock_quantity {
-                                                if product.force_no_stock || qty == 0 {
+                                                if !current_variant.has_stock_relations && !product.force_no_stock {
+                                                    rsx! {
+                                                        div { class: "blinking-gray mt-[6px] mr-[8px]" }
+                                                        p { { t!("unstocked") } }
+                                                    }
+                                                } else if product.force_no_stock || qty == 0 {
                                                     if product.back_order {
                                                         rsx ! {
-                                                            // CHANGED: From blinking-amber to blinking-yellow
                                                             div { class: "blinking-yellow mt-[6px] mr-[8px]" }
                                                             p { { t!("backorder-oos") } }
                                                         }
@@ -1109,14 +1121,19 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                     {
                                         let stock_now = current_stock_quantity();
                                         let qty_val = *quantity.read();
+                                        let variant_is_unstocked = !product.force_no_stock
+                                            && product.variants.as_ref()
+                                                .and_then(|vs| vs.get(*current_variant.read()))
+                                                .map(|v| !v.has_stock_relations)
+                                                .unwrap_or(false);
                                         let disabled = product.force_no_stock || stock_now == 0 || qty_val <= 0;
                                         if disabled {
                                             rsx! {
                                                 button {
-                                                    title: { t!("product-currently-out-of-stock") },
+                                                    title: if variant_is_unstocked { "No stock items linked".to_string() } else { t!("product-currently-out-of-stock").to_string() },
                                                     class: "ml-2 cursor-not-allowed bg-blend transition-fg relative inline-flex items-center justify-center overflow-hidden rounded-md outline-none disabled:bg-ui-bg-disabled disabled:border-ui-border-base disabled:text-ui-fg-disabled disabled:shadow-buttons-neutral disabled:after:hidden after:transition-fg after:absolute after:inset-0 after:content-[''] shadow-buttons-inverted text-ui-fg-on-inverted bg-zinc-700 after:button-inverted-gradient active:bg-ui-button-inverted-pressed active:after:button-inverted-pressed-gradient focus:!shadow-buttons-inverted-focus txt-compact-small-plus gap-x-1.5 px-3 py-1.5 w-full h-10",
                                                     disabled: true,
-                                                    { t!("out-of-stock") }
+                                                    { if variant_is_unstocked { t!("unstocked") } else { t!("out-of-stock") } }
                                                 }
                                             }
                                         } else {
@@ -1276,7 +1293,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                             div {
                                 class: "flex flex-col sm:flex-row gap-3",
                                 Link {
-                                    to: Route::Collections {},
+                                    to: Route::Collection { codename: String::from("all") },
                                     class: "inline-flex items-center justify-center px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-md hover:bg-gray-800 transition-colors",
                                     "Browse products"
                                 }

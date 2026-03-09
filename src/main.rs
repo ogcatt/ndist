@@ -35,7 +35,7 @@ use views::{
     AdminCreateProduct, AdminCreateStockItem, AdminStockLocations, AdminUsers, AdminDiscounts, AdminEditBlogPost,
     AdminEditDiscount, AdminEditProduct, AdminEditStockItem, AdminInventory, AdminOrders,
     AdminProducts, AdminSettings, AdminCreateGroup, AdminEditGroup, AdminGroups, BlogPostPage, BlogPosts, Cart, Checkout, CheckoutPayment,
-    Collection, Collections, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound, GroupPage,
+    Collection, Contact, Dashboard as AdminDashboard, UserDashboard, Faq, Home, NotFound, GroupPage,
     OrderStatus, PeptideCalculator, Policies, ProductPage, ShippingPolicy, SignIn as AdminSignIn,
     VerifyMagicLink,
 };
@@ -55,8 +55,6 @@ enum Route {
         #[route("/dashboard")]
         UserDashboard {},
         #[nest("/categories")]
-            #[route("")]
-            Collections {},
             #[route("/:codename")]
             Collection { codename: String },
         #[end_nest]
@@ -158,7 +156,7 @@ enum Route {
     #[end_nest]
     // REDIRECTS
     #[nest("/categories")]
-        #[redirect("/", || Route::Collections {})]
+        #[redirect("/", || Route::Collection { codename: String::from("all") })]
         #[redirect("/:codename", |codename: String| Route::Collection { codename })]
     #[end_nest]
     #[nest("/category")]
@@ -358,6 +356,7 @@ fn App() -> Element {
         // Head links
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: TAILWIND_CSS }
+        document::Link { rel: "stylesheet", href: MAIN_CSS }
         // Add analytics
         //REMOVE THIS
         /*
