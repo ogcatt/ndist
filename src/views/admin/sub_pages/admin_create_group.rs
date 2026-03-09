@@ -467,7 +467,7 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
                             if saving() {
                                 "bg-gray-500 cursor-not-allowed"
                             } else {
-                                "bg-gray-900 hover:bg-gray-800"
+                                "bg-zinc-600 hover:bg-zinc-500"
                             }
                         ),
                         disabled: saving(),
@@ -667,7 +667,7 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
                         button {
                             class: format!(
                                 "text-sm px-3 py-1.5 text-white rounded transition-colors {}",
-                                if generating_code() { "bg-gray-400 cursor-not-allowed" } else { "bg-gray-900 hover:bg-gray-800" }
+                                if generating_code() { "bg-gray-400 cursor-not-allowed" } else { "bg-zinc-600 hover:bg-zinc-500" }
                             ),
                             disabled: generating_code(),
                             onclick: move |_| {
@@ -826,7 +826,7 @@ pub fn AdminGroup(props: AdminGroupProps) -> Element {
                         button {
                             class: format!(
                                 "text-sm px-3 py-1.5 text-white rounded transition-colors whitespace-nowrap {}",
-                                if creating_api_key() { "bg-gray-400 cursor-not-allowed" } else { "bg-gray-900 hover:bg-gray-800" }
+                                if creating_api_key() { "bg-gray-400 cursor-not-allowed" } else { "bg-zinc-600 hover:bg-zinc-500" }
                             ),
                             disabled: creating_api_key(),
                             onclick: move |_| {

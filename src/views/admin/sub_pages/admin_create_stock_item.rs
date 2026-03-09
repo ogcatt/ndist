@@ -321,7 +321,7 @@ pub fn AdminStockItem(props: AdminStockItemProps) -> Element {
             }
             button {
                 class: format!("text-sm px-3 py-2 text-white rounded transition-colors {}",
-                    if saving() { "bg-gray-500 cursor-not-allowed" } else { "bg-gray-900 hover:bg-gray-800" }
+                    if saving() { "bg-gray-500 cursor-not-allowed" } else { "bg-zinc-600 hover:bg-zinc-500" }
                 ),
                 disabled: saving(),
                 onclick: handle_submit,

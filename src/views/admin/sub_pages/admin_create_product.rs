@@ -284,7 +284,16 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                     product.access_users.as_deref().unwrap_or(&[]),
                     product.phase,
                 );
-                initial_snapshot.set(snap);
+                // Also include variant data so thumbnail/name/price changes are detected
+                let variant_snap = product.variants.as_deref().unwrap_or(&[]).iter().map(|v| {
+                    format!("{}|{}|{}|{:?}",
+                        v.id,
+                        v.thumbnail_url.as_deref().unwrap_or(""),
+                        v.additional_thumbnail_urls.as_deref().map(|u| u.join(",")).unwrap_or_default(),
+                        v.price_standard_usd,
+                    )
+                }).collect::<Vec<_>>().join(";");
+                initial_snapshot.set(format!("{snap}||variants:{variant_snap}"));
 
                 loading.set(false);
             } else {
@@ -907,6 +916,15 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                             access_users.read().iter().map(|u| u.id.clone()).collect::<Vec<_>>().as_slice(),
                             phase(),
                         );
+                        let variant_current = variants.read().iter().map(|v| {
+                            format!("{}|{}|{}|{:?}",
+                                v.id.as_deref().unwrap_or(""),
+                                v.primary_thumbnail_url.as_deref().unwrap_or(""),
+                                v.additional_thumbnail_urls.as_deref().map(|u| u.join(",")).unwrap_or_default(),
+                                v.price_base_standard_usd,
+                            )
+                        }).collect::<Vec<_>>().join(";");
+                        let current = format!("{current}||variants:{variant_current}");
                         current != initial_snapshot()
                     } else {
                         true
@@ -917,7 +935,7 @@ pub fn AdminProduct(props: AdminProductProps) -> Element {
                                 if saving() { "bg-gray-500 cursor-not-allowed" }
                                 else if !is_dirty { "bg-gray-300 cursor-not-allowed" }
                                 else if is_edit_mode { "bg-blue-600 hover:bg-blue-700" }
-                                else { "bg-gray-900 hover:bg-gray-800" }
+                                else { "bg-zinc-600 hover:bg-zinc-500" }
                             ),
                             disabled: saving() || !is_dirty,
                             onclick: handle_save_product,

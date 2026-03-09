@@ -93,7 +93,7 @@ pub fn AdminSettings() -> Element {
                 }
 
                 button {
-                    class: "bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-800 transition-colors disabled:opacity-50",
+                    class: "bg-zinc-600 text-white text-sm px-4 py-2 rounded hover:bg-zinc-500 transition-colors disabled:opacity-50",
                     disabled: saving(),
                     onclick: on_save,
                     if saving() { "Saving..." } else { "Save Settings" }

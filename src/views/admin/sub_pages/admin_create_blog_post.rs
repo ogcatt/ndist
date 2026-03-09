@@ -189,7 +189,7 @@ pub fn AdminBlogPost(props: AdminBlogPostProps) -> Element {
                 button {
                     class: format!("text-sm px-3 py-2 text-white rounded transition-colors {}",
                         if saving() { "bg-gray-500 cursor-not-allowed" } else {
-                            if is_edit_mode { "bg-blue-600 hover:bg-blue-700" } else { "bg-gray-900 hover:bg-gray-800" }
+                            if is_edit_mode { "bg-blue-600 hover:bg-blue-700" } else { "bg-zinc-600 hover:bg-zinc-500" }
                         }
                     ),
                     disabled: saving(),

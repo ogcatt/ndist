@@ -6,7 +6,7 @@ use std::time::Duration;
 use strum::IntoEnumIterator;
 
 use crate::Route;
-use crate::backend::cache::{use_cached_server, use_hybrid_cache};
+use crate::backend::cache::use_hybrid_cache;
 use crate::backend::front_entities::Category;
 use crate::backend::server_functions;
 use crate::components::{CollectionsGrid, Meta, ProductCard, WideProductCard};
@@ -28,43 +28,24 @@ pub fn Home() -> Element {
         Meta {}
 
         div {
-            class: "pt-8 md:pt-12",
+            style: "background-color:#ffffff; background-image: linear-gradient(45deg,#f8f8f8 25%,transparent 25%), linear-gradient(-45deg,#f8f8f8 25%,transparent 25%), linear-gradient(45deg,transparent 75%,#f8f8f8 75%), linear-gradient(-45deg,transparent 75%,#f8f8f8 75%); background-size:25px 25px; background-position:0 0,0 12.5px,12.5px -12.5px,-12.5px 0px;",
+            // Full-width banner outside the content container
             div {
-                class: "content-container py-0 sm:pt-0 sm:pb-12 px-6",
-
-
-                div {
-                    class: "mb-8 flex flex-col justify-center w-full border-ui-border-base border rounded-md overflow-hidden",
-
-                    // Image container with reduced height
-                    div {
-                        class: "flex justify-center lg:min-h-60 max-h-80 overflow-hidden",
-                        img {
-                            src: asset!("/assets/images/blank-banner.jpg"),
-                            alt: "Banner",
-                            class: "w-full max-h-80 h-full",
-                            style: "object-fit: cover;",
-                            draggable: "false",
-                            decoding: "async",
-                            "fetchpriority": "high"
-                        }
-                    }
-
-                    // Text bar with icon
-                    div {
-                        class: "p-4 bg-gray-50 flex items-center gap-3",
-                        img {
-                            class: "blende",
-                            src: asset!("/assets/icons/newspaper-outline.svg"),
-                            style: "height:20px;"
-                        },
-                        Link {
-                            to: Route::BlogPostPage { id: "5456dcfc-ff47-4fe6-b53a-7f631bec1719".to_string() },
-                            class: "text-sm text-gray-700 underline",
-                            "Visit our blog post for details about our return and what's in store."
-                        }
-                    }
+                class: "w-full overflow-hidden",
+                style: "height: 50vh;",
+                img {
+                    src: asset!("/assets/images/blank-banner.jpg"),
+                    alt: "Banner",
+                    class: "w-full h-full",
+                    style: "object-fit: cover;",
+                    draggable: "false",
+                    decoding: "async",
+                    "fetchpriority": "high"
                 }
+            }
+
+            div {
+                class: "content-container py-0 sm:pt-0 sm:pb-12 px-6 pt-8 md:pt-12",
 
                 {
                     let filtered_products = match &*products_data.read() {
@@ -135,7 +116,8 @@ pub fn Home() -> Element {
                                             div {
                                                 class: "flex justify-between mb-6",
                                                 p {
-                                                    class: "font-normal font-sans txt-medium text-xl",
+                                                    class: "font-normal font-sans txt-medium",
+                                                    style: "font-size: 1.35rem;",
                                                     "{label}"
                                                 }
                                                 Link {

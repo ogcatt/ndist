@@ -1163,7 +1163,7 @@ fn OrderDetailModal(
                                     "{notes_text}"
                                 }
                                 button {
-                                    class: "px-3 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700",
+                                    class: "px-3 py-1.5 bg-zinc-600 text-white text-sm rounded hover:bg-zinc-500",
                                     onclick: {
                                         let order_id = order.id.clone();
                                         move |_| {
@@ -1431,7 +1431,7 @@ pub fn AdminOrders() -> Element {
                         for timespan in [TimeSpan::Days7, TimeSpan::Days30, TimeSpan::Days60, TimeSpan::Days90, TimeSpan::Days180, TimeSpan::Days360] {
                             button {
                                 class: if *selected_timespan.read() == timespan {
-                                    "px-2 py-1 bg-gray-900 text-white rounded text-xs"
+                                    "px-2 py-1 bg-zinc-600 text-white rounded text-xs"
                                 } else {
                                     "px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs hover:bg-gray-200"
                                 },

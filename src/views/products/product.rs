@@ -365,7 +365,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
 
                             // Main Image
                             div {
-                                class: "relative aspect-square rounded-lg overflow-hidden shadow-lg border-ui-border-base border",
+                                class: "relative aspect-square overflow-hidden shadow-lg border-ui-border-base border",
 
                                 {
                                     let preview = &*preview_url.read();
@@ -609,7 +609,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                             // Thumbnails Row
                             div {
                                 id: "img_row",
-                                class: "flex justify-center mt-3.5 overflow-x-auto",
+                                class: "flex justify-start mt-2 overflow-x-auto",
 
                                 // Variant thumbnails
                                 {
@@ -626,7 +626,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                             if has_main_thumbnail || has_additional_thumbnails {
                                                 rsx! {
                                                     div {
-                                                        class: "flex flex-nowrap mt-4 px-1.5", // Removed gap, will use margins instead
+                                                        class: "flex flex-nowrap mt-2 px-1.5", // Removed gap, will use margins instead
 
                                                         // Main thumbnail (if exists)
                                                         {
@@ -635,7 +635,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                 rsx! {
                                                                     div {
                                                                         key: "{\"main-thumb\"}",
-                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
+                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 overflow-hidden border-ui-border-base border mr-1.5",
                                                                         onclick: move |_| preview_url.set(thumbnail_clone.clone()),
                                                                         img {
                                                                             alt: { format!("{} {}", product.title, t!("thumbnail")) },
@@ -659,7 +659,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                         rsx! {
                                                                             div {
                                                                                 key: "{i}",
-                                                                                class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md overflow-hidden border-ui-border-base border mr-1.5",
+                                                                                class: "flex-shrink-0 cursor-pointer w-32 h-32 overflow-hidden border-ui-border-base border mr-1.5",
                                                                                 onclick: move |_| preview_url.set(thumbnail_clone.clone()),
                                                                                 img {
                                                                                     alt: { format!("{} {} {}", product.title, t!("additional-thumbnail"), i) },
@@ -682,7 +682,7 @@ pub fn ProductPage(handle: ReadOnlySignal<String>) -> Element {
                                                                 if variants.iter().any(|v| v.thumbnail_url.is_some()) {
                                                                     div {
                                                                         title: { t!("mol-info") },
-                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 rounded-md border-ui-border-base border overflow-hidden flex items-center justify-center mr-1.5",
+                                                                        class: "flex-shrink-0 cursor-pointer w-32 h-32 border-ui-border-base border overflow-hidden flex items-center justify-center mr-1.5",
                                                                         onclick: move |_| preview_url.set("smiles".to_string()),
                                                                         div {
                                                                             class: "w-full h-full",

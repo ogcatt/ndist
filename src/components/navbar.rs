@@ -625,7 +625,7 @@ pub fn Header() -> Element {
                                                 class: "flex justify-center",
                                                 img {
                                                     class: "fadey",
-                                                    src: asset!("/assets/icons/receipt-outline.svg"),
+                                                    src: asset!("/assets/icons/color-wand-outline.svg"),
                                                     style: "height:27px;"
                                                 }
                                             }
@@ -956,7 +956,7 @@ pub fn Header() -> Element {
                                     class: "flex items-center py-3 px-4 text-gray-900 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
                                     img {
                                         class: "blende mr-3",
-                                        src: asset!("/assets/icons/receipt.svg"),
+                                        src: asset!("/assets/icons/color-wand-outline.svg"),
                                         style: "height:20px;"
                                     },
                                     "Admin"

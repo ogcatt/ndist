@@ -226,7 +226,7 @@ pub fn AdminStockLocations() -> Element {
                     div { class: "flex gap-2",
                         button {
                             class: format!("flex-1 text-sm px-3 py-2 text-white rounded transition-colors {}",
-                                if saving() { "bg-gray-400 cursor-not-allowed" } else { "bg-gray-900 hover:bg-gray-800" }
+                                if saving() { "bg-gray-400 cursor-not-allowed" } else { "bg-zinc-600 hover:bg-zinc-500" }
                             ),
                             disabled: saving(),
                             onclick: handle_submit,

@@ -46,7 +46,7 @@ pub fn AdminContent() -> Element {
                 Link {
                     to: Route::AdminCreateBlogPost {},
                     button {
-                        class: "text-sm bg-gray-900 px-3 py-2 text-white rounded hover:bg-gray-800 transition-colors",
+                        class: "text-sm bg-zinc-600 px-3 py-2 text-white rounded hover:bg-zinc-500 transition-colors",
                         "Create Blog Post"
                     }
                 }

@@ -26,7 +26,7 @@ pub fn ProductCard(
                 class: "group",
 
                 div {
-                    class: "{top_class} boop rounded-lg relative overflow-hidden p-4 bg-ui-bg-subtle shadow-elevation-card-rest rounded-large aspect-square w-full border-gray-200 border",
+                    class: "{top_class} boop relative overflow-hidden bg-ui-bg-subtle shadow-elevation-card-rest aspect-square w-full border-gray-200 border",
 
                     // Skeleton image
                     div {
@@ -180,7 +180,7 @@ pub fn ProductCard(
     let card_content = rsx! {
         div {
             // Apply different classes based on access
-            class: if user_has_access { "{top_class} boop rounded-lg relative overflow-hidden p-4 bg-ui-bg-subtle shadow-elevation-card-rest rounded-large group-hover:shadow-elevation-card-hover transition-shadow ease-in-out duration-150 aspect-square w-full border-gray-200 border" } else { "{top_class} rounded-lg relative overflow-hidden p-4 bg-ui-bg-subtle shadow-elevation-card-rest rounded-large aspect-square w-full border-gray-200 border cursor-not-allowed" },
+            class: if user_has_access { "{top_class} boop relative overflow-hidden bg-ui-bg-subtle shadow-elevation-card-rest group-hover:shadow-elevation-card-hover transition-shadow ease-in-out duration-150 aspect-square w-full border-gray-200 border bg-white" } else { "{top_class} relative overflow-hidden bg-ui-bg-subtle shadow-elevation-card-rest aspect-square w-full border-gray-200 border cursor-not-allowed bg-white" },
 
             // Pre-order indicator (shows if pre_order is true, regardless of stock)
             if product.pre_order {
