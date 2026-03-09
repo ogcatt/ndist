@@ -21,7 +21,7 @@ RUN cargo binstall dioxus-cli --root /.cargo -y --force --version 0.7.3
 ENV PATH="/.cargo/bin:$PATH"
 
 # Create the final bundle folder. Bundle always executes in release mode with optimizations enabled
-RUN dx bundle --platform web
+RUN dx bundle --platform web --release
 
 # THIRD STAGE
 
