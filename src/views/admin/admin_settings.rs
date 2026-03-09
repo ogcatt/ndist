@@ -99,6 +99,31 @@ pub fn AdminSettings() -> Element {
                     if saving() { "Saving..." } else { "Save Settings" }
                 }
             }
+
+            // API Keys informational card
+            div {
+                class: "bg-white border rounded-md border-gray-200 p-6 max-w-xl mt-4",
+
+                div {
+                    class: "text-sm font-semibold text-gray-700 mb-3",
+                    "API Keys"
+                }
+
+                p { class: "text-sm text-gray-600 mb-3",
+                    "API keys are managed per-group and allow external services to generate invite codes programmatically."
+                }
+
+                p { class: "text-sm text-gray-500 mb-4",
+                    "Go to a group's edit page to create or manage its API keys."
+                }
+
+                a {
+                    href: "/admin/dashboard/groups",
+                    class: "inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800",
+                    "Manage Groups"
+                    span { class: "ml-1", " →" }
+                }
+            }
         }
     }
 }

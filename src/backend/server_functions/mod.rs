@@ -11,6 +11,7 @@ pub mod stock_calculations;
 pub mod uploads;
 pub mod groups;
 pub mod settings;
+pub mod invite_codes;
 
 // Re-export all public items to maintain backward compatibility
 pub use auth::*;
@@ -24,6 +25,7 @@ pub use stock_calculations::*;
 pub use uploads::*;
 pub use groups::*;
 pub use settings::*;
+pub use invite_codes::*;
 
 // Allow payments access with server_functions::payments
 pub use super::payments;

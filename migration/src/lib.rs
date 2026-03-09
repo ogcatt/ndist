@@ -58,6 +58,7 @@ mod add_stock_location_enabled;
 mod add_store_settings;
 mod add_access_users;
 mod update_categories;
+mod add_invite_system;
 
 pub struct Migrator;
 
@@ -126,6 +127,7 @@ impl MigratorTrait for Migrator {
             Box::new(add_store_settings::Migration),
             Box::new(add_access_users::Migration),
             Box::new(update_categories::Migration),
+            Box::new(add_invite_system::Migration),
         ]
     }
 }

@@ -33,6 +33,8 @@ pub mod pre_order;
 pub mod groups;
 pub mod group_members;
 pub mod store_settings;
+pub mod api_keys;
+pub mod group_invite_codes;
 
 // Add this custom type for handling string arrays
 pub mod types {

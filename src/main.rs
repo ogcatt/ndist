@@ -19,6 +19,7 @@ use crate::backend::{
     sitemap::generate_sitemap,
     meta_cache,
     meta_injection::inject_meta_middleware,
+    api::invite::generate_invite_code_handler,
 };
 use crate::i18n::{
     config,
@@ -259,6 +260,8 @@ async fn main() {
         .route("/sitemap.xml", axum::routing::get(sitemap_handler))
         // Add robots.txt endpoint
         .route("/robots.txt", axum::routing::get(robots_handler))
+        // Invite code API
+        .route("/novapi/v1/groups/invite/generate", axum::routing::post(generate_invite_code_handler))
         .nest_service("/public", ServeDir::new("assets/images/public"))
         .layer(axum::middleware::from_fn(inject_meta_middleware))
         .nest_service("/uploads", ServeDir::new(upload_path)) // Add uploads route

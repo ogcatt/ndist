@@ -6,6 +6,7 @@ use crate::backend::cache::{use_hybrid_cache, use_stale_while_revalidate};
 use crate::backend::server_functions;
 use crate::backend::server_functions::groups::UserGroupInfo;
 use crate::backend::server_functions::get_session_info;
+use crate::backend::server_functions::invite_codes::{redeem_invite_code, RedeemCodeResponse};
 use crate::backend::front_entities::Product;
 use std::time::Duration;
 
@@ -207,6 +208,42 @@ pub fn UserDashboard() -> Element {
 
 #[component]
 fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupInfo>>>, all_products_data: Signal<Option<Vec<Product>>>) -> Element {
+    let mut invite_code_input = use_signal(|| String::new());
+    let mut redeem_loading = use_signal(|| false);
+    let mut redeem_result = use_signal(|| Option::<RedeemCodeResponse>::None);
+    let mut show_invite_input = use_signal(|| false);
+
+    let handle_redeem = move |_| {
+        let code = invite_code_input();
+        if code.trim().is_empty() { return; }
+        spawn(async move {
+            redeem_loading.set(true);
+            redeem_result.set(None);
+            match redeem_invite_code(code).await {
+                Ok(resp) => {
+                    if resp.success {
+                        // Clear caches so group access is reflected immediately
+                        let _ = document::eval(
+                            "localStorage.removeItem('cache_get_user_groups');
+                             localStorage.removeItem('cache_session_info');
+                             localStorage.removeItem('cache_get_products');"
+                        );
+                    }
+                    redeem_result.set(Some(resp));
+                }
+                Err(e) => {
+                    redeem_result.set(Some(RedeemCodeResponse {
+                        success: false,
+                        message: format!("Error: {}", e),
+                        group_id: None,
+                        group_name: None,
+                    }));
+                }
+            }
+            redeem_loading.set(false);
+        });
+    };
+
     rsx! {
         div { class: "max-w-4xl",
             h2 { class: "text-2xl leading-7 text-gray-900 sm:text-3xl mb-8",
@@ -269,14 +306,66 @@ fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupI
                 // Groups section
                 if !session.group_ids.is_empty() {
                     div { class: "bg-white border border-gray-200 overflow-hidden sm:rounded-lg",
-                        div { class: "px-4 py-5 sm:px-6",
-                            h3 { class: "text-lg leading-6 font-medium text-gray-900",
-                                "Your Groups"
+                        div { class: "px-4 py-5 sm:px-6 flex justify-between items-start",
+                            div {
+                                h3 { class: "text-lg leading-6 font-medium text-gray-900",
+                                    "Your Groups"
+                                }
+                                p { class: "mt-1 max-w-2xl text-sm text-gray-500",
+                                    "Groups you're a member of"
+                                }
                             }
-                            p { class: "mt-1 max-w-2xl text-sm text-gray-500",
-                                "Groups you're a member of"
+                            button {
+                                class: "text-sm text-blue-600 hover:text-blue-800 font-medium whitespace-nowrap",
+                                onclick: move |_| show_invite_input.set(!show_invite_input()),
+                                if show_invite_input() { "Cancel" } else { "Enter invite code" }
                             }
                         }
+
+                        // Inline invite code form (when toggled)
+                        if show_invite_input() {
+                            div { class: "px-4 pb-4 sm:px-6",
+                                div { class: "flex gap-2",
+                                    input {
+                                        class: "flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase",
+                                        placeholder: "XXXXXXXX",
+                                        value: "{invite_code_input}",
+                                        oninput: move |e| invite_code_input.set(e.value()),
+                                    }
+                                    button {
+                                        class: format!(
+                                            "px-4 py-2 text-sm text-white rounded-md transition-colors {}",
+                                            if redeem_loading() { "bg-gray-400 cursor-not-allowed" } else { "bg-blue-600 hover:bg-blue-700" }
+                                        ),
+                                        disabled: redeem_loading(),
+                                        onclick: handle_redeem,
+                                        if redeem_loading() { "Redeeming..." } else { "Redeem" }
+                                    }
+                                }
+                                if let Some(ref result) = redeem_result() {
+                                    div { class: "mt-2",
+                                        if result.success {
+                                            div { class: "text-sm text-green-600",
+                                                "{result.message}"
+                                                if let Some(ref gid) = result.group_id {
+                                                    span {
+                                                        " "
+                                                        a {
+                                                            href: "/groups/{gid}",
+                                                            class: "underline font-medium",
+                                                            "View group products →"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            div { class: "text-sm text-red-600", "{result.message}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         div { class: "border-t border-gray-200 px-4 py-5 sm:px-6",
                             {
                                 let groups_opt = groups_data.read().clone();
@@ -349,6 +438,58 @@ fn OverviewPage(session: SessionState, groups_data: Signal<Option<Vec<UserGroupI
                                         p { class: "text-sm text-gray-500",
                                             "Loading groups..."
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // No groups — show invite code form inside a card
+                    div { class: "bg-white border border-gray-200 overflow-hidden sm:rounded-lg",
+                        div { class: "px-4 py-5 sm:px-6",
+                            h3 { class: "text-lg leading-6 font-medium text-gray-900",
+                                "Your Groups"
+                            }
+                            p { class: "mt-1 max-w-2xl text-sm text-gray-500",
+                                "You are not yet a member of any groups. Enter an invite code to join one."
+                            }
+                        }
+                        div { class: "border-t border-gray-200 px-4 py-5 sm:px-6",
+                            div { class: "flex gap-2 max-w-md",
+                                input {
+                                    class: "flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase",
+                                    placeholder: "XXXXXXXX",
+                                    value: "{invite_code_input}",
+                                    oninput: move |e| invite_code_input.set(e.value()),
+                                }
+                                button {
+                                    class: format!(
+                                        "px-4 py-2 text-sm text-white rounded-md transition-colors {}",
+                                        if redeem_loading() { "bg-gray-400 cursor-not-allowed" } else { "bg-blue-600 hover:bg-blue-700" }
+                                    ),
+                                    disabled: redeem_loading(),
+                                    onclick: handle_redeem,
+                                    if redeem_loading() { "Redeeming..." } else { "Redeem" }
+                                }
+                            }
+                            if let Some(ref result) = redeem_result() {
+                                div { class: "mt-3",
+                                    if result.success {
+                                        div { class: "text-sm text-green-600",
+                                            "{result.message}"
+                                            if let Some(ref gid) = result.group_id {
+                                                span {
+                                                    " "
+                                                    a {
+                                                        href: "/groups/{gid}",
+                                                        class: "underline font-medium",
+                                                        "View group products →"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        div { class: "text-sm text-red-600", "{result.message}" }
                                     }
                                 }
                             }

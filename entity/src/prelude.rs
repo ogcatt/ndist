@@ -28,3 +28,5 @@ pub use super::pre_order::Entity as PreOrder;
 pub use super::groups::Entity as Groups;
 pub use super::group_members::Entity as GroupMembers;
 pub use super::store_settings::Entity as StoreSettings;
+pub use super::api_keys::Entity as ApiKeys;
+pub use super::group_invite_codes::Entity as GroupInviteCodes;
