@@ -1,0 +1,142 @@
+/* ============================================================
+   Admin dark theme overrides
+   Applied when .admin-dark class is on the root wrapper element.
+   Higher specificity (.admin-dark .class) overrides Tailwind utilities.
+
+   Zinc palette reference:
+     zinc-50:  #fafafa   zinc-100: #f4f4f5   zinc-200: #e4e4e7
+     zinc-300: #d4d4d8   zinc-400: #a1a1aa   zinc-500: #71717a
+     zinc-600: #52525b   zinc-700: #3f3f46   zinc-800: #27272a
+     zinc-900: #18181b   zinc-950: #09090b
+   ============================================================ */
+
+/* ── Base: fix default browser black text ─────────────────── */
+.admin-dark {
+    color: #e4e4e7; /* zinc-200 — covers any element with no explicit text class */
+}
+
+/* ── Backgrounds ─────────────────────────────────────────── */
+.admin-dark .bg-white          { background-color: #27272a; } /* zinc-800 */
+.admin-dark .bg-gray-50        { background-color: #3f3f46; } /* zinc-700 — distinguishable sub-section bg */
+.admin-dark .bg-gray-100       { background-color: #27272a; } /* zinc-800 */
+.admin-dark .bg-gray-200       { background-color: #3f3f46; } /* zinc-700 */
+
+/* ── Borders: explicit color classes ─────────────────────── */
+.admin-dark .border-gray-100   { border-color: #27272a; }     /* zinc-800 */
+.admin-dark .border-gray-200   { border-color: #3f3f46; }     /* zinc-700 */
+.admin-dark .border-gray-300   { border-color: #52525b; }     /* zinc-600 */
+
+/* ── Borders: bare .border class (no explicit gray-* color)  */
+/* Covers elements like `class="border rounded-lg"` that rely  */
+/* on Tailwind's preflight default of gray-200.                */
+.admin-dark .border            { border-color: #3f3f46; }     /* zinc-700 */
+.admin-dark .border-t          { border-top-color:    #3f3f46; }
+.admin-dark .border-b          { border-bottom-color: #3f3f46; }
+.admin-dark .border-l          { border-left-color:   #3f3f46; }
+.admin-dark .border-r          { border-right-color:  #3f3f46; }
+
+/* Re-assert accent border colors that also have the bare .border class */
+.admin-dark .border-orange-200 { border-color: #f97316; }     /* orange-500 */
+.admin-dark .border-yellow-200 { border-color: #eab308; }     /* yellow-500 */
+.admin-dark .border-red-200    { border-color: #f87171; }     /* red-400 */
+.admin-dark .border-green-200  { border-color: #4ade80; }     /* green-400 */
+
+/* ── Rounded cards: elements with both bg-white and border ── */
+/* Matches the card/section styling used elsewhere in admin.  */
+.admin-dark .bg-white.border   { border-radius: 0.5rem; }
+
+/* ── Text ────────────────────────────────────────────────── */
+.admin-dark .text-gray-900     { color: #f4f4f5; }            /* zinc-100 */
+.admin-dark .text-gray-800     { color: #e4e4e7; }            /* zinc-200 */
+.admin-dark .text-gray-700     { color: #d4d4d8; }            /* zinc-300 */
+.admin-dark .text-gray-600     { color: #a1a1aa; }            /* zinc-400 */
+.admin-dark .text-gray-500     { color: #a1a1aa; }            /* zinc-400 */
+.admin-dark .text-gray-400     { color: #71717a; }            /* zinc-500 */
+
+/* ── Hover states ────────────────────────────────────────── */
+.admin-dark .hover\:bg-gray-50:hover  { background-color: #3f3f46; }  /* zinc-700 */
+.admin-dark .hover\:bg-gray-100:hover { background-color: #3f3f46; }  /* zinc-700 */
+.admin-dark .hover\:bg-gray-200:hover { background-color: #52525b; }  /* zinc-600 */
+.admin-dark .hover\:border-gray-400:hover { border-color: #71717a; }  /* zinc-500 */
+.admin-dark .hover\:border-gray-300:hover { border-color: #52525b; }  /* zinc-600 */
+.admin-dark .hover\:text-gray-900:hover   { color: #f4f4f5; }
+.admin-dark .hover\:text-gray-700:hover   { color: #d4d4d8; }
+
+/* ── Divide lines ────────────────────────────────────────── */
+.admin-dark .divide-gray-200 > * + * { border-color: #3f3f46; }
+.admin-dark .divide-gray-100 > * + * { border-color: #27272a; }
+
+/* ── Form inputs ─────────────────────────────────────────── */
+.admin-dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+.admin-dark select,
+.admin-dark textarea {
+    background-color: #3f3f46;  /* zinc-700 */
+    border-color: #52525b;      /* zinc-600 */
+    color: #f4f4f5;             /* zinc-100 */
+}
+
+.admin-dark input::placeholder,
+.admin-dark textarea::placeholder {
+    color: #71717a; /* zinc-500 */
+}
+
+.admin-dark select option {
+    background-color: #3f3f46;
+    color: #f4f4f5;
+}
+
+.admin-dark input:focus,
+.admin-dark select:focus,
+.admin-dark textarea:focus {
+    border-color: #3b82f6;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* ── Tables ──────────────────────────────────────────────── */
+.admin-dark thead,
+.admin-dark thead tr,
+.admin-dark thead th {
+    background-color: #18181b;  /* zinc-900 */
+    color: #a1a1aa;             /* zinc-400 */
+    border-color: #3f3f46;      /* zinc-700 */
+}
+
+.admin-dark tbody tr {
+    border-color: #3f3f46;
+}
+
+.admin-dark tbody tr:hover {
+    background-color: #3f3f46;
+}
+
+.admin-dark td {
+    border-color: #3f3f46;
+}
+
+/* ── Icons in main content area ──────────────────────────── */
+/* Small SVG icon <img> tags that are black on transparent;   */
+/* scoped to <main> so sidebar icons (already handled via     */
+/* the .invert wrapper div in admin_wrapper.rs) are not       */
+/* double-inverted.                                           */
+.admin-dark main img.w-4.h-4,
+.admin-dark main img.w-5.h-5,
+.admin-dark main img.w-6.h-6 {
+    filter: invert(1);
+}
+
+/* ── Product thumbnail image border ─────────────────────── */
+/* Bare `border` on <img> tags uses Tailwind preflight gray-  */
+/* 200 default; override to zinc-700.                         */
+.admin-dark img.rounded.border,
+.admin-dark img.border {
+    border-color: #52525b;  /* zinc-600 */
+}
+
+/* ── Preserve accent/status colors (do not override) ──────── */
+/* bg-black, bg-blue-*, bg-green-*, bg-red-*, bg-yellow-*, etc.
+   are intentionally left alone to keep colored accents. */
+
+/* ── Skeleton / loading placeholders ──────────────────────── */
+.admin-dark .animate-pulse .bg-gray-200 { background-color: #3f3f46; }
+.admin-dark .animate-pulse .bg-gray-300 { background-color: #52525b; }

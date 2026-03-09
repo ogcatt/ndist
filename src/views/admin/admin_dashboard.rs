@@ -61,7 +61,13 @@ pub fn Dashboard() -> Element {
         var labels = {labels};
         var orderData = {orders};
         var revenueData = {revenue};
-        var axisFont = {{ font: {{ family: 'monospace', size: 10 }} }};
+        var isDark = document.querySelector('.admin-dark') !== null;
+        var barColor   = isDark ? 'rgba(212,212,216,0.85)' : 'rgba(0,0,0,0.8)';
+        var lineColor  = isDark ? '#a1a1aa'                 : 'rgba(0,0,0,0.85)';
+        var lineFill   = isDark ? 'rgba(161,161,170,0.08)'  : 'rgba(0,0,0,0.05)';
+        var gridColor  = isDark ? 'rgba(255,255,255,0.07)'  : 'rgba(0,0,0,0.06)';
+        var tickColor  = isDark ? '#71717a'                 : '#666';
+        var axisFont = {{ font: {{ family: 'monospace', size: 10 }}, color: tickColor }};
 
         var oc = document.getElementById('admin-orders-chart');
         if (oc) {{
@@ -70,14 +76,14 @@ pub fn Dashboard() -> Element {
                 type: 'bar',
                 data: {{
                     labels: labels,
-                    datasets: [{{ label: 'Orders', data: orderData, backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 2 }}]
+                    datasets: [{{ label: 'Orders', data: orderData, backgroundColor: barColor, borderRadius: 2 }}]
                 }},
                 options: {{
                     responsive: true, maintainAspectRatio: false,
                     plugins: {{ legend: {{ display: false }} }},
                     scales: {{
                         x: {{ grid: {{ display: false }}, ticks: Object.assign({{ maxTicksLimit: 8 }}, axisFont) }},
-                        y: {{ beginAtZero: true, ticks: Object.assign({{ stepSize: 1 }}, axisFont), grid: {{ color: 'rgba(0,0,0,0.06)' }} }}
+                        y: {{ beginAtZero: true, ticks: Object.assign({{ stepSize: 1 }}, axisFont), grid: {{ color: gridColor }} }}
                     }}
                 }}
             }});
@@ -90,14 +96,14 @@ pub fn Dashboard() -> Element {
                 type: 'line',
                 data: {{
                     labels: labels,
-                    datasets: [{{ label: 'Revenue ($)', data: revenueData, borderColor: 'rgba(0,0,0,0.85)', backgroundColor: 'rgba(0,0,0,0.05)', fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }}]
+                    datasets: [{{ label: 'Revenue ($)', data: revenueData, borderColor: lineColor, backgroundColor: lineFill, fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2 }}]
                 }},
                 options: {{
                     responsive: true, maintainAspectRatio: false,
                     plugins: {{ legend: {{ display: false }} }},
                     scales: {{
                         x: {{ grid: {{ display: false }}, ticks: Object.assign({{ maxTicksLimit: 8 }}, axisFont) }},
-                        y: {{ beginAtZero: true, ticks: Object.assign({{ callback: function(v) {{ return '$' + v.toFixed(0); }} }}, axisFont), grid: {{ color: 'rgba(0,0,0,0.06)' }} }}
+                        y: {{ beginAtZero: true, ticks: Object.assign({{ callback: function(v) {{ return '$' + v.toFixed(0); }} }}, axisFont), grid: {{ color: gridColor }} }}
                     }}
                 }}
             }});
