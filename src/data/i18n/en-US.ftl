@@ -83,13 +83,11 @@ num-result-found = {$num} result found
 
 ### Collections
 all-products = All Products
-nootropics = Nootropics
-pbios = PBIOs
-peptides-and-longevity = Peptides & Longevity
-natural = Natural
-sarms-and-physical = SARMS & Physical
-bodygen = BodyGen©
-pheroblend = Pheroblend©
+chondrogenic = Chondrogenic
+osteogenic = Osteogenic
+protective = Protective
+nootropic = Nootropic
+other = Other
 
 search = Search
 start-typing-to-search = Start typing to search...

@@ -3,10 +3,13 @@ use dioxus::prelude::*;
 use dioxus_i18n::t;
 use std::time::Duration;
 
+use strum::IntoEnumIterator;
+
 use crate::Route;
 use crate::backend::cache::{use_cached_server, use_hybrid_cache};
+use crate::backend::front_entities::Category;
 use crate::backend::server_functions;
-use crate::components::{CollectionsGrid, Meta, ProductCard, WideProductCard}; // Import the ProductCard component
+use crate::components::{CollectionsGrid, Meta, ProductCard, WideProductCard};
 use crate::utils::{countries::allowed_countries, sort_products_by_priority};
 // use crate::components::Collections; // Uncomment if you have a Collections component
 
@@ -106,79 +109,81 @@ pub fn Home() -> Element {
                     }
                 }
 
-                // Header section with title and view all link
-                div {
-                    class: "flex justify-between mb-8",
-                    p {
-                        class: "font-normal font-sans txt-medium text-xl",
-                        { t!("featured-products") }
-                    }
-                    Link {
-                        class: "flex gap-x-1 items-center group",
-                        to: Route::Collection { codename: String::from("all") },
-                        p {
-                            class: "font-normal font-sans txt-medium text-ui-fg-interactive",
-                            { t!("view-all") }
-                        }
-                        svg {
-                            xmlns: "http://www.w3.org/2000/svg",
-                            width: "20",
-                            height: "20",
-                            fill: "none",
-                            class: "group-hover:rotate-45 ease-in-out duration-200",
-                            path {
-                                stroke: "var(--text-ui-fg-interactive)",
-                                "stroke-linecap": "round",
-                                "stroke-linejoin": "round",
-                                "stroke-width": "1.5",
-                                d: "m5.75 14.25 8.5-8.5m0 0h-7.5m7.5 0v7.5"
-                            }
-                        }
-                    }
-                }
-
                 {match &*products_data.read() {
                     Some(products) => rsx! {
+                        for category in Category::iter() {
+                            {
+                                let key = category.to_key().to_string();
+                                let mut cat_products: Vec<_> = products
+                                    .iter()
+                                    .filter(|p| {
+                                        p.collections.as_ref()
+                                            .map_or(false, |colls| colls.contains(&key))
+                                    })
+                                    .cloned()
+                                    .collect();
+                                let cat_products = sort_products_by_priority(&cat_products);
+                                let label = category.to_string();
+                                let codename = key.clone();
 
-                        ul {
-                            class: "grid md:grid-cols-3 lg:grid-cols-4 grid-cols-2 gap-x-4 md:gap-x-6 md:gap-y-20 gap-y-10",
-
-                            for product in sort_products_by_priority(&products) {
-                                li {
-                                    class: "",
-                                    ProductCard {
-                                        key: "{product.id}",
-                                        product: product.clone(),
-                                        top_class: ""
+                                if cat_products.is_empty() {
+                                    rsx! {}
+                                } else {
+                                    rsx! {
+                                        div {
+                                            class: "mb-12",
+                                            div {
+                                                class: "flex justify-between mb-6",
+                                                p {
+                                                    class: "font-normal font-sans txt-medium text-xl",
+                                                    "{label}"
+                                                }
+                                                Link {
+                                                    class: "flex gap-x-1 items-center group",
+                                                    to: Route::Collection { codename },
+                                                    p {
+                                                        class: "font-normal font-sans txt-medium text-ui-fg-interactive",
+                                                        { t!("view-all") }
+                                                    }
+                                                    svg {
+                                                        xmlns: "http://www.w3.org/2000/svg",
+                                                        width: "20",
+                                                        height: "20",
+                                                        fill: "none",
+                                                        class: "group-hover:rotate-45 ease-in-out duration-200",
+                                                        path {
+                                                            stroke: "var(--text-ui-fg-interactive)",
+                                                            "stroke-linecap": "round",
+                                                            "stroke-linejoin": "round",
+                                                            "stroke-width": "1.5",
+                                                            d: "m5.75 14.25 8.5-8.5m0 0h-7.5m7.5 0v7.5"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            ul {
+                                                class: "grid md:grid-cols-3 lg:grid-cols-4 grid-cols-2 gap-x-4 md:gap-x-6 md:gap-y-20 gap-y-10",
+                                                for product in cat_products {
+                                                    li {
+                                                        ProductCard {
+                                                            key: "{product.id}",
+                                                            product: product.clone(),
+                                                            top_class: ""
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
-
                         }
-
-                        // Bottom text section
-                        /*
-                        div {
-                            class: "text-center mt-16",
-                            p {
-                                class: "text-ui-fg-muted text-sm",
-                                { t!("twitter-plug") } {" "}
-                                a {
-                                    class: "a",
-                                    target: "_blank",
-                                    href: "https://x.com/",
-                                    { t!("x-twitter") }
-                                }
-                                "."
-                            }
-                        }
-                        */
 
                         // Mobile-only Categories section
                         div {
-                            class: "block md:hidden md:mt-16 mb-10",
+                            class: "block md:hidden mb-10",
                             div {
-                                class: "md:hidden flex mb-8 mt-8 justify-between",
+                                class: "flex mb-6 mt-4 justify-between",
                                 p {
                                     class: "font-normal font-sans txt-medium text-xl",
                                     { t!("categories") }
@@ -187,26 +192,12 @@ pub fn Home() -> Element {
                             CollectionsGrid {}
                         }
                     },
-                    /*
-                    Some(err) => rsx! {
-                        div {
-                            class: "text-center py-8",
-                            p {
-                                class: "text-red-500",
-                                { t!("error-loading-products", error: format!("{:?}", err)) }
-                            }
-                        }
-                    },
-                    */
                     None => rsx! {
                         ul {
                             class: "grid md:grid-cols-3 lg:grid-cols-4 grid-cols-2 gap-x-4 md:gap-x-6 md:gap-y-20 gap-y-10",
                             for _num in 0..4 {
                                 li {
-                                    class: "",
-                                    ProductCard {
-                                        loading: true
-                                    }
+                                    ProductCard { loading: true }
                                 }
                             }
                         }

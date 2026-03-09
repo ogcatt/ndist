@@ -256,29 +256,29 @@ pub fn Header() -> Element {
                                         { t!("all-products") }
                                     },
                                     Link {
-                                        to: Route::Collection { codename: String::from("nootropics") },
+                                        to: Route::Collection { codename: String::from("chondrogenic") },
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                        { t!("nootropics") }
+                                        { t!("chondrogenic") }
                                     },
                                     Link {
-                                        to: Route::Collection { codename: String::from("pbios") },
+                                        to: Route::Collection { codename: String::from("osteogenic") },
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                        { t!("pbios") }
+                                        { t!("osteogenic") }
                                     },
                                     Link {
-                                        to: Route::Collection { codename: String::from("peptides-and-longevity") },
+                                        to: Route::Collection { codename: String::from("protective") },
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                        { t!("peptides-and-longevity") }
+                                        { t!("protective") }
                                     },
                                     Link {
-                                        to: Route::Collection { codename: String::from("natural") },
+                                        to: Route::Collection { codename: String::from("nootropic") },
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                        { t!("natural") }
+                                        { t!("nootropic") }
                                     },
                                     Link {
-                                        to: Route::Collection { codename: String::from("sarms-and-physical") },
+                                        to: Route::Collection { codename: String::from("other") },
                                         class: "block px-5 py-3 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out",
-                                        { t!("sarms-and-physical") }
+                                        { t!("other") }
                                     },
                                 }
                             },
@@ -736,34 +736,34 @@ pub fn Header() -> Element {
                                                 { t!("all-products") }
                                             },
                                             Link {
-                                                to: Route::Collection { codename: String::from("pbios") },
+                                                to: Route::Collection { codename: String::from("chondrogenic") },
                                                 onclick: move |_| open_menu.set(false),
                                                 class: "block py-2 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
-                                                { t!("pbios") }
+                                                { t!("chondrogenic") }
                                             },
                                             Link {
-                                                to: Route::Collection { codename: String::from("nootropics") },
+                                                to: Route::Collection { codename: String::from("osteogenic") },
                                                 onclick: move |_| open_menu.set(false),
                                                 class: "block py-2 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
-                                                { t!("nootropics") }
+                                                { t!("osteogenic") }
                                             },
                                             Link {
-                                                to: Route::Collection { codename: String::from("peptides-and-longevity") },
+                                                to: Route::Collection { codename: String::from("protective") },
                                                 onclick: move |_| open_menu.set(false),
                                                 class: "block py-2 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
-                                                { t!("peptides-and-longevity") }
+                                                { t!("protective") }
                                             },
                                             Link {
-                                                to: Route::Collection { codename: String::from("natural") },
+                                                to: Route::Collection { codename: String::from("nootropic") },
                                                 onclick: move |_| open_menu.set(false),
                                                 class: "block py-2 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
-                                                { t!("natural") }
+                                                { t!("nootropic") }
                                             },
                                             Link {
-                                                to: Route::Collection { codename: String::from("physical") },
+                                                to: Route::Collection { codename: String::from("other") },
                                                 onclick: move |_| open_menu.set(false),
                                                 class: "block py-2 px-6 text-gray-700 hover:bg-gray-100 transition-colors duration-200 ease-out border-b border-gray-200",
-                                                { t!("sarms-and-physical") }
+                                                { t!("other") }
                                             }
                                         }
                                     }

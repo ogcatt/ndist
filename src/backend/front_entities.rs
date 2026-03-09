@@ -324,51 +324,43 @@ pub enum ProductPhase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, EnumString, Serialize, Deserialize)]
 pub enum Category {
-    Nootropics,
-    PBIOs,
-    PeptidesAndLongevity,
-    Natural,
-    SarmsAndPhysical,
-    Bodygen,
-    Pheroblend,
+    Chondrogenic,
+    Osteogenic,
+    Protective,
+    Nootropic,
+    Other,
 }
 
 impl Category {
     pub fn to_string(&self) -> String {
         match self {
-            Category::Nootropics => t!("nootropics"),
-            Category::PBIOs => t!("pbios"),
-            Category::PeptidesAndLongevity => t!("peptides-and-longevity"),
-            Category::Natural => t!("natural"),
-            Category::SarmsAndPhysical => t!("sarms-and-physical"),
-            Category::Bodygen => t!("bodygen"),
-            Category::Pheroblend => t!("pheroblend"),
+            Category::Chondrogenic => t!("chondrogenic"),
+            Category::Osteogenic => t!("osteogenic"),
+            Category::Protective => t!("protective"),
+            Category::Nootropic => t!("nootropic"),
+            Category::Other => t!("other"),
         }
     }
 
     // Converts enum type to "key" type which is used in page handles etc.
     pub fn to_key(&self) -> &str {
         match self {
-            Category::Nootropics => "nootropics",
-            Category::PBIOs => "pbios",
-            Category::PeptidesAndLongevity => "peptides-and-longevity",
-            Category::Natural => "natural",
-            Category::SarmsAndPhysical => "sarms-and-physical",
-            Category::Bodygen => "bodygen",
-            Category::Pheroblend => "pheroblend",
+            Category::Chondrogenic => "chondrogenic",
+            Category::Osteogenic => "osteogenic",
+            Category::Protective => "protective",
+            Category::Nootropic => "nootropic",
+            Category::Other => "other",
         }
     }
 
     /// Converts a key string back to the corresponding Category variant
     pub fn from_key(s: &str) -> Option<Self> {
         match s {
-            "nootropics" => Some(Category::Nootropics),
-            "pbios" => Some(Category::PBIOs),
-            "peptides-and-longevity" => Some(Category::PeptidesAndLongevity),
-            "natural" => Some(Category::Natural),
-            "sarms-and-physical" => Some(Category::SarmsAndPhysical),
-            "bodygen" => Some(Category::Bodygen),
-            "pheroblend" => Some(Category::Pheroblend),
+            "chondrogenic" => Some(Category::Chondrogenic),
+            "osteogenic" => Some(Category::Osteogenic),
+            "protective" => Some(Category::Protective),
+            "nootropic" => Some(Category::Nootropic),
+            "other" => Some(Category::Other),
             _ => None,
         }
     }

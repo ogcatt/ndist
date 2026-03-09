@@ -345,25 +345,7 @@ pub fn Collection(codename: ReadOnlySignal<String>) -> Element {
                     document::Title { { format!("{} - {}", t!("brand"), title ) } }
 
                     {
-                        if let Some(current_collection) = collection_enum() {
-                            match current_collection {
-                                Category::Bodygen => rsx! {
-                                    img {
-                                        class: "w-full rounded-md mb-6 md:mb-8 min-h-28 object-cover",
-                                        src: asset!("/assets/images/bodygen-banner.avif")
-                                    }
-                                },
-                                Category::Pheroblend => rsx! {
-                                    img {
-                                        class: "w-full rounded-md mb-6 md:mb-8 min-h-28 object-cover",
-                                        src: asset!("/assets/images/pheroblend-banner.avif")
-                                    }
-                                },
-                                _ => rsx! {}
-                            }
-                        } else {
-                            rsx! {}
-                        }
+                        { rsx! {} }
                     }
 
                     h2 {

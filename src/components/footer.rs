@@ -11,15 +11,11 @@ pub fn Footer() -> Element {
 
     let categories = vec![
         ("All.avif", t!("all-products"), "all"),
-        ("PBIOs.avif", t!("pbios"), "pbios"),
-        ("Nootropics.avif", t!("nootropics"), "nootropics"),
-        (
-            "Peptides.avif",
-            t!("peptides-and-longevity"),
-            "peptides-and-longevity",
-        ),
-        ("Natural.avif", t!("natural"), "natural"),
-        ("Physical.avif", t!("sarms-and-physical"), "physical"),
+        ("Chondrogenic.avif", t!("chondrogenic"), "chondrogenic"),
+        ("Osteogenic.avif", t!("osteogenic"), "osteogenic"),
+        ("Protective.avif", t!("protective"), "protective"),
+        ("Nootropic.avif", t!("nootropic"), "nootropic"),
+        ("Other.avif", t!("other"), "other"),
     ];
 
     rsx! {

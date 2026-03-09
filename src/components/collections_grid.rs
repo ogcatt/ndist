@@ -8,11 +8,11 @@ use chrono::{Local, Datelike};
 pub fn CollectionsGrid() -> Element {
     let categories = vec![
         (asset!("/assets/images/categories/All.avif"), "All Products", "all"),
-        (asset!("/assets/images/categories/PBIOs.avif"), "PBIOs", "pbios"),
-        (asset!("/assets/images/categories/Nootropics.avif"), "Nootropics", "nootropics"),
-        (asset!("/assets/images/categories/Peptides.avif"), "Peptides & Longevity", "peptides-and-longevity"),
-        (asset!("/assets/images/categories/Natural.avif"), "Natural", "natural"),
-        (asset!("/assets/images/categories/Physical.avif"), "SARMS & Physical", "sarms-and-physical")
+        (asset!("/assets/images/categories/Chondrogenic.avif"), "Chondrogenic", "chondrogenic"),
+        (asset!("/assets/images/categories/Osteogenic.avif"), "Osteogenic", "osteogenic"),
+        (asset!("/assets/images/categories/Protective.avif"), "Protective", "protective"),
+        (asset!("/assets/images/categories/Nootropic.avif"), "Nootropic", "nootropic"),
+        (asset!("/assets/images/categories/Other.avif"), "Other", "other"),
     ]; // update other in footer if edited
     
     rsx! {
