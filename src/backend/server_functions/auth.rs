@@ -502,7 +502,10 @@ pub async fn verify_otp(
 async fn extract_session_token_from_request() -> Result<Option<String>, ServerFnError> {
     use dioxus::fullstack::FullstackContext;
 
-    let server_ctx = FullstackContext::current().expect("Server context should be available");
+    let server_ctx = match FullstackContext::current() {
+        Some(ctx) => ctx,
+        None => return Ok(None),
+    };
     let request_parts = server_ctx.parts_mut();
 
     let cookie_header = request_parts
